@@ -97,7 +97,31 @@ public class MDNSDiscover {
         }
     }
 
-    static void decode(byte[] packet, int packetLength) throws IOException {
+    static class Record {
+        String fqdn;
+        int ttl;
+    }
+
+    static class A extends Record {
+        String ipaddr;
+    }
+
+    static class SRV extends Record {
+        int priority, weight, port;
+        String target;
+    }
+
+    static class TXT extends Record {
+        Map<String, String> dict;
+    }
+
+    static class Result {
+        A a;
+        SRV srv;
+        TXT txt;
+    }
+
+    static Result decode(byte[] packet, int packetLength) throws IOException {
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(packet, 0, packetLength));
         short transactionID = dis.readShort();
         short flags = dis.readShort();
@@ -112,6 +136,7 @@ public class MDNSDiscover {
             short qclass = dis.readShort();
         }
         // decode the answers
+        Result result = new Result();
         for (int i = 0; i < answers + authorityRRs + additionalRRs; i++) {
             String fqdn = decodeFQDN(dis, packet, packetLength);
             short type = dis.readShort();
@@ -122,33 +147,41 @@ public class MDNSDiscover {
             int length = dis.readUnsignedShort();
             byte[] data = new byte[length];
             dis.readFully(data);
+            Record record = null;
             switch (type) {
                 case QTYPE_A:
-                    System.out.println(decodeA(data));
+                    record = result.a = decodeA(data);
                     break;
                 case QTYPE_SRV:
-                    decodeSRV(data, packet, packetLength);
+                    record = result.srv = decodeSRV(data, packet, packetLength);
                     break;
                 case QTYPE_PTR:
                     System.out.println(decodePTR(data, packet, packetLength));
                     break;
                 case QTYPE_TXT:
-                    System.out.println(decodeTXT(data));
+                    record = result.txt = decodeTXT(data);
                     break;
                 default:
                     hexdump(data, 0, data.length);
                     break;
             }
+            if (record != null) {
+                record.fqdn = fqdn;
+                record.ttl = ttl;
+            }
         }
+        return result;
     }
 
-    private static void decodeSRV(byte[] srvData, byte[] packetData, int packetLength) throws IOException {
+    private static SRV decodeSRV(byte[] srvData, byte[] packetData, int packetLength) throws IOException {
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(srvData));
-        int priority = dis.readUnsignedShort();
-        int weight = dis.readUnsignedShort();
-        int port = dis.readUnsignedShort();
-        String target = decodeFQDN(dis, packetData, packetLength);
-        System.out.printf("Priority: %d Weight: %d Port: %d Target: %s%n", priority, weight, port, target);
+        SRV srv = new SRV();
+        srv.priority = dis.readUnsignedShort();
+        srv.weight = dis.readUnsignedShort();
+        srv.port = dis.readUnsignedShort();
+        srv.target = decodeFQDN(dis, packetData, packetLength);
+        System.out.printf("Priority: %d Weight: %d Port: %d Target: %s%n", srv.priority, srv.weight, srv.port, srv.target);
+        return srv;
     }
 
     private static String typeString(short type) {
@@ -171,29 +204,40 @@ public class MDNSDiscover {
         return decodeFQDN(dis, packet, packetLength);
     }
 
-    private static String decodeA(byte[] data) throws IOException {
+    private static A decodeA(byte[] data) throws IOException {
         if (data.length < 4) throw new IOException("expected 4 bytes for IPv4 addr");
-        return (data[0] & 0xFF) + "." + (data[1] & 0xFF) + "." + (data[2] & 0xFF) + "." + (data[3] & 0xFF);
+        A a = new A();
+        a.ipaddr = (data[0] & 0xFF) + "." + (data[1] & 0xFF) + "." + (data[2] & 0xFF) + "." + (data[3] & 0xFF);
+        return a;
     }
 
-    private static Map<String, String> decodeTXT(byte[] data) throws IOException {
-        Map<String, String> result = new HashMap<>();
+    private static TXT decodeTXT(byte[] data) throws IOException {
+        TXT txt = new TXT();
+        txt.dict = new HashMap<>();
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data));
         while (true) {
             int length;
             try {
                 length = dis.readUnsignedByte();
             } catch (EOFException e) {
-                return result;
+                return txt;
             }
             byte[] segmentBytes = new byte[length];
             dis.readFully(segmentBytes);
             String segment = new String(segmentBytes);
             int pos = segment.indexOf('=');
+            String key, value = null;
             if (pos != -1) {
-                String key = segment.substring(0, pos);
-                String value = segment.substring(pos + 1);
-                result.put(key, value);
+                key = segment.substring(0, pos);
+                value = segment.substring(pos + 1);
+            } else {
+                key = segment;
+            }
+            if (!txt.dict.containsKey(key)) {
+                // from RFC6763
+                // If a client receives a TXT record containing the same key more than once, then
+                // the client MUST silently ignore all but the first occurrence of that attribute."
+                txt.dict.put(key, value);
             }
         }
     }
