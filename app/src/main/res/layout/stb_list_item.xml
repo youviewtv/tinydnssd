@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="@dimen/gap_normal">
+
+    <TextView
+        android:id="@+id/text_service_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/gap_small"
+        tools:text="Service Name" />
+
+    <TextView
+        android:id="@+id/text_dns_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/gap_small"
+        tools:text="DNS Name" />
+
+    <TextView
+        android:id="@+id/text_ip_port"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="@dimen/gap_small"
+        tools:text="IP+port" />
+
+    <TextView
+        android:id="@+id/text_vendor_serial"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        tools:text="Vendor+Serial" />
+
+</LinearLayout>
