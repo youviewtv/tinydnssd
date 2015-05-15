@@ -31,7 +31,7 @@ public class DiscoverActivity extends Activity {
             @Override
             public void run() {
                 try {
-                    MDNSDiscover.discover("_yv-bridge._tcp.local");
+                    MDNSDiscover.discover("_yv-bridge._tcp.local", null, 5000);
                 } catch (IOException e) {
                     Log.e(TAG, "error calling discover()", e);
                 }

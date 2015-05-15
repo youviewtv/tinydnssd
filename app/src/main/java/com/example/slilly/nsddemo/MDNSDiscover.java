@@ -10,6 +10,7 @@ import java.io.OutputStream;
 import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.MulticastSocket;
+import java.net.SocketTimeoutException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -28,11 +29,16 @@ public class MDNSDiscover {
     private static final int PORT = 5353;
 
     public static void main(String[] args) throws IOException {
-        discover("_yv-bridge._tcp.local");
-//        discover("_googlecast._tcp.local");
+        discover("_yv-bridge._tcp.local", null, 5000);
+//        discover("_googlecast._tcp.local", null, 5000);
     }
 
-    public static void discover(String serviceType) throws IOException {
+    public interface Callback {
+        void onResult(Result result);
+    }
+
+    public static void discover(String serviceType, Callback callback, int timeout) throws IOException {
+        if (timeout < 0) throw new IllegalArgumentException();
         InetAddress group = InetAddress.getByName("224.0.0.251");
         MulticastSocket sock = new MulticastSocket();   // binds to a random free source port
         System.out.println("Source port is " + sock.getLocalPort());
@@ -54,11 +60,29 @@ public class MDNSDiscover {
         sock.send(packet);
         byte[] buf = new byte[1024];
         packet = new DatagramPacket(buf, buf.length);
+        long endTime = 0;
+        if (timeout != 0) {
+            endTime = System.currentTimeMillis() + timeout;
+        }
         while (true) {
-            sock.receive(packet);
+            if (timeout != 0) {
+                int remaining = (int) (endTime - System.currentTimeMillis());
+                if (remaining <= 0) {
+                    break;
+                }
+                sock.setSoTimeout(remaining);
+            }
+            try {
+                sock.receive(packet);
+            } catch (SocketTimeoutException e) {
+                break;
+            }
             System.out.println("\n\nIncoming packet:");
             hexdump(packet.getData(), 0, packet.getLength());
-            decode(packet.getData(), packet.getLength());
+            Result result = decode(packet.getData(), packet.getLength());
+            if (callback != null) {
+                callback.onResult(result);
+            }
         }
     }
 
