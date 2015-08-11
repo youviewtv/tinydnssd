@@ -28,6 +28,8 @@ public class MDNSDiscover {
     private static final short CLASS_FLAG_MULTICAST = 0, CLASS_FLAG_UNICAST = (short) 0x8000;
     private static final int PORT = 5353;
 
+    private static final String MULTICAST_GROUP_ADDRESS = "224.0.0.251";
+
     public static void main(String[] args) throws IOException {
         discover("_yv-bridge._tcp.local", null, 5000);
 //        discover("_googlecast._tcp.local", null, 5000);
@@ -37,26 +39,45 @@ public class MDNSDiscover {
         void onResult(Result result);
     }
 
-    public static void discover(String serviceType, Callback callback, int timeout) throws IOException {
-        if (timeout < 0) throw new IllegalArgumentException();
-        InetAddress group = InetAddress.getByName("224.0.0.251");
-        MulticastSocket sock = new MulticastSocket();   // binds to a random free source port
-        System.out.println("Source port is " + sock.getLocalPort());
+    private static byte[] discoverPacket(String serviceType) throws IOException {
+        return queryPacket(serviceType, QCLASS_INTERNET | CLASS_FLAG_UNICAST, QTYPE_PTR);
+    }
+
+    private static byte[] queryPacket(String serviceName, int qclass, int... qtypes) throws IOException {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(bos);
         dos.writeInt(0);
-        dos.writeShort(1);  // questions
+        dos.writeShort(qtypes.length);  // questions
         dos.writeShort(0);  // answers
         dos.writeShort(0);  // nscount
         dos.writeShort(0);  // arcount
-        writeFQDN(serviceType, dos);
-        dos.writeShort(QTYPE_PTR);
-        dos.writeShort(QCLASS_INTERNET | CLASS_FLAG_UNICAST);
+        int fqdnPtr = -1;
+        for (int qtype : qtypes) {
+            if (fqdnPtr == -1) {
+                fqdnPtr = dos.size();
+                writeFQDN(serviceName, dos);
+            } else {
+                // packet compression, string is just a pointer to previous occurrence
+                dos.write(0xc0 | (fqdnPtr >> 8));
+                dos.write(fqdnPtr & 0xFF);
+            }
+            dos.writeShort(qtype);
+            dos.writeShort(qclass);
+        }
         dos.close();
-        byte[] data = bos.toByteArray();
+        return bos.toByteArray();
+    }
+
+    public static void discover(String serviceType, Callback callback, int timeout) throws IOException {
+        if (timeout < 0) throw new IllegalArgumentException();
+        InetAddress group = InetAddress.getByName(MULTICAST_GROUP_ADDRESS);
+        MulticastSocket sock = new MulticastSocket();   // binds to a random free source port
+        System.out.println("Source port is " + sock.getLocalPort());
+        byte[] data = discoverPacket(serviceType);
         System.out.println("Query packet:");
         hexdump(data, 0, data.length);
         DatagramPacket packet = new DatagramPacket(data, data.length, group, PORT);
+        sock.setTimeToLive(255);
         sock.send(packet);
         byte[] buf = new byte[1024];
         packet = new DatagramPacket(buf, buf.length);
@@ -84,6 +105,26 @@ public class MDNSDiscover {
                 callback.onResult(result);
             }
         }
+    }
+
+    public static Result resolve(String serviceName, int timeout) throws IOException {
+        if (timeout < 0) throw new IllegalArgumentException();
+        InetAddress group = InetAddress.getByName(MULTICAST_GROUP_ADDRESS);
+        MulticastSocket sock = new MulticastSocket();   // binds to a random free source port
+        System.out.println("Source port is " + sock.getLocalPort());
+        System.out.println("Query packet:");
+        byte[] data = queryPacket(serviceName, QCLASS_INTERNET | CLASS_FLAG_UNICAST, QTYPE_TXT, QTYPE_SRV);
+        hexdump(data, 0, data.length);
+        DatagramPacket packet = new DatagramPacket(data, data.length, group, PORT);
+        sock.setTimeToLive(255);
+        sock.send(packet);
+        byte[] buf = new byte[1024];
+        packet = new DatagramPacket(buf, buf.length);
+        sock.setSoTimeout(timeout);
+        sock.receive(packet);
+        System.out.println("\n\nIncoming packet:");
+        hexdump(packet.getData(), 0, packet.getLength());
+        return decode(packet.getData(), packet.getLength());
     }
 
     private static void writeFQDN(String name, OutputStream out) throws IOException {
@@ -232,6 +273,7 @@ public class MDNSDiscover {
         if (data.length < 4) throw new IOException("expected 4 bytes for IPv4 addr");
         A a = new A();
         a.ipaddr = (data[0] & 0xFF) + "." + (data[1] & 0xFF) + "." + (data[2] & 0xFF) + "." + (data[3] & 0xFF);
+        System.out.println("Ipaddr: " + a.ipaddr);
         return a;
     }
 
@@ -257,6 +299,7 @@ public class MDNSDiscover {
             } else {
                 key = segment;
             }
+            System.out.println(key + "=" + value);
             if (!txt.dict.containsKey(key)) {
                 // from RFC6763
                 // If a client receives a TXT record containing the same key more than once, then
