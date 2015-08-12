@@ -3,10 +3,13 @@ package com.example.slilly.tinydnssd;
 import android.content.Context;
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
+import android.os.AsyncTask;
 import android.os.Handler;
 import android.util.Log;
 
+import java.io.IOException;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -16,18 +19,21 @@ import java.util.Map;
 class DiscoverResolver {
 
     private static final String TAG = DiscoverResolver.class.getSimpleName();
+    private static final int RESOLVE_TIMEOUT = 1000;
 
     public interface Listener {
-        void onServicesChanged(Map<String, NsdServiceInfo> services);
+        void onServicesChanged(Map<String, MDNSDiscover.Result> services);
     }
 
     private final NsdManager mNsdManager;
     private final String mServiceType;
-    private HashMap<String, NsdServiceInfo> mServices = new HashMap<>();
+    private HashMap<String, MDNSDiscover.Result> mServices = new HashMap<>();
     private Handler mHandler = new Handler();
     private final Listener mListener;
     private boolean mStarted;
     private boolean mDiscovering;
+    private ResolveTask mResolveTask;
+    private final Map<String, NsdServiceInfo> mResolveQueue = new LinkedHashMap<>();
 
     DiscoverResolver(Context context, String serviceType, Listener listener) {
         if (serviceType == null || listener == null) {
@@ -53,10 +59,11 @@ class DiscoverResolver {
         if (mDiscovering) {
             mNsdManager.stopServiceDiscovery(mDiscoveryListener);
         }
+        synchronized (mResolveQueue) {
+            mResolveQueue.clear();
+        }
         mStarted = false;
     }
-
-    private LinkedHashMap<String, NsdServiceInfo> mResolveQueue = new LinkedHashMap<>();
 
     private NsdManager.DiscoveryListener mDiscoveryListener = new NsdManager.DiscoveryListener() {
         @Override
@@ -89,69 +96,35 @@ class DiscoverResolver {
         @Override
         public void onServiceFound(final NsdServiceInfo serviceInfo) {
             Log.d(TAG, "onServiceFound() serviceInfo = [" + serviceInfo + "]");
-            synchronized (DiscoverResolver.this) {
-                if (mStarted) {
-                    mResolveQueue.put(serviceInfo.getServiceName(), serviceInfo);
-                    iterateResolver();
+            if (mStarted) {
+                String name = serviceInfo.getServiceName() + "." + serviceInfo.getServiceType() + "local";
+                synchronized (mResolveQueue) {
+                    mResolveQueue.put(name, null);
                 }
+                startResolveTaskIfNeeded();
             }
         }
 
         @Override
-        public void onServiceLost(NsdServiceInfo serviceInfo) {
+        public void onServiceLost(final NsdServiceInfo serviceInfo) {
             Log.d(TAG, "onServiceLost() serviceInfo = [" + serviceInfo + "]");
-            synchronized (DiscoverResolver.this) {
-                if (mStarted) {
-                    mResolveQueue.remove(serviceInfo.getServiceName());
+            mHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    if (mStarted) {
+                        String name = serviceInfo.getServiceName() + "." + serviceInfo.getServiceType() + "local";
+                        synchronized (mResolveQueue) {
+                            mResolveQueue.remove(name);
+                        }
+                        removeService(name);
+                    }
                 }
-            }
+            });
         }
     };
 
-    private void iterateResolver() {
-        if (!(mResolving || mResolveQueue.isEmpty())) {
-            NsdServiceInfo info = mResolveQueue.values().iterator().next();
-            mNsdManager.resolveService(info, mResolveListener);
-            mResolving = true;
-        }
-    }
-
-    private boolean mResolving;
-    private NsdManager.ResolveListener mResolveListener = new NsdManager.ResolveListener() {
-
-        @Override
-        public void onResolveFailed(NsdServiceInfo serviceInfo, int errorCode) {
-            Log.d(TAG, "onResolveFailed() serviceInfo = [" + serviceInfo + "], errorCode = " + errorCode);
-            synchronized (DiscoverResolver.this) {
-                mResolving = false;
-                mResolveQueue.remove(serviceInfo.getServiceName());
-                if (mStarted) {
-                    removeService(unescape(serviceInfo.getServiceName()));
-                    iterateResolver();
-                }
-            }
-        }
-
-        @Override
-        public void onServiceResolved(NsdServiceInfo serviceInfo) {
-            Log.d(TAG, "onServiceResolved() serviceInfo = [" + serviceInfo + "]");
-            synchronized (DiscoverResolver.this) {
-                mResolving = false;
-                mResolveQueue.remove(serviceInfo.getServiceName());
-                if (mStarted) {
-                    addService(serviceInfo);
-                    iterateResolver();
-                }
-            }
-        }
-    };
-
-    private String unescape(String name) {
-        return name.replace("\\032", " ");
-    }
-
-    private void addService(NsdServiceInfo serviceInfo) {
-        mServices.put(serviceInfo.getServiceName(), serviceInfo);
+    private void addService(MDNSDiscover.Result result) {
+        mServices.put(result.srv.fqdn, result);
         dispatchServicesChanged();
     }
 
@@ -162,12 +135,53 @@ class DiscoverResolver {
     }
 
     private void dispatchServicesChanged() {
-        final HashMap<String, NsdServiceInfo> services = (HashMap) mServices.clone();
-        mHandler.post(new Runnable() {
-            @Override
-            public void run() {
-                mListener.onServicesChanged(services);
+        final HashMap<String, MDNSDiscover.Result> services = (HashMap) mServices.clone();
+        mListener.onServicesChanged(services);
+    }
+
+    private class ResolveTask extends AsyncTask<Void, MDNSDiscover.Result, Void> {
+        @Override
+        protected Void doInBackground(Void... params) {
+            while (!isCancelled()) {
+                String serviceName;
+                synchronized (mResolveQueue) {
+                    Iterator<String> it = mResolveQueue.keySet().iterator();
+                    if (!it.hasNext()) {
+                        break;
+                    }
+                    serviceName = it.next();
+                    it.remove();
+                }
+                try {
+                    MDNSDiscover.Result result = MDNSDiscover.resolve(serviceName, RESOLVE_TIMEOUT);
+                    publishProgress(result);
+                } catch(IOException e) {
+                    e.printStackTrace();
+                }
             }
-        });
+            return null;
+        }
+
+        @Override
+        protected void onPostExecute(Void aVoid) {
+            mResolveTask = null;
+            startResolveTaskIfNeeded();
+        }
+
+        @Override
+        protected void onProgressUpdate(MDNSDiscover.Result... values) {
+            addService(values[0]);
+        }
+    }
+
+    private void startResolveTaskIfNeeded() {
+        if (mResolveTask == null) {
+            synchronized (mResolveQueue) {
+                if (!mResolveQueue.isEmpty()) {
+                    mResolveTask = new ResolveTask();
+                    mResolveTask.execute();
+                }
+            }
+        }
     }
 }

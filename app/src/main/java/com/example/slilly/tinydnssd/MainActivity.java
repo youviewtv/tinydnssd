@@ -100,10 +100,10 @@ public class MainActivity extends ActionBarActivity implements DiscoverResolver.
     }
 
     @Override
-    public void onServicesChanged(Map<String, NsdServiceInfo> services) {
+    public void onServicesChanged(Map<String, MDNSDiscover.Result> services) {
         mServiceList = new ArrayList<>();
-        for (NsdServiceInfo service : services.values()) {
-            mServiceList.add(service.getServiceName() + " " + service.getAttributes());
+        for (MDNSDiscover.Result service : services.values()) {
+            mServiceList.add(service.srv.fqdn + " " + service.txt.dict);
         }
         Collections.sort(mServiceList);
         mAdapter.notifyDataSetChanged();
