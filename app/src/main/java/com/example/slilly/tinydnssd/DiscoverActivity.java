@@ -1,8 +1,8 @@
 package com.example.slilly.tinydnssd;
 
-import android.app.Activity;
 import android.os.Bundle;
 import android.os.Handler;
+import android.support.v7.app.ActionBarActivity;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
@@ -14,7 +14,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-public class DiscoverActivity extends Activity {
+public class DiscoverActivity extends ActionBarActivity {
 
     private static final String TAG = DiscoverActivity.class.getSimpleName();
 
