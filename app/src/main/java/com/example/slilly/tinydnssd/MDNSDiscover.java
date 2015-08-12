@@ -1,4 +1,4 @@
-package com.example.slilly.nsddemo;
+package com.example.slilly.tinydnssd;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;

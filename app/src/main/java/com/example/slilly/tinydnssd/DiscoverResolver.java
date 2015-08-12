@@ -1,4 +1,4 @@
-package com.example.slilly.nsddemo;
+package com.example.slilly.tinydnssd;
 
 import android.content.Context;
 import android.net.nsd.NsdManager;

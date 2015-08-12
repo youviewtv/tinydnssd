@@ -1,4 +1,4 @@
-package com.example.slilly.nsddemo;
+package com.example.slilly.tinydnssd;
 
 import android.net.nsd.NsdServiceInfo;
 import android.support.v7.app.ActionBarActivity;
