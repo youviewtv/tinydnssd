@@ -10,6 +10,8 @@ import android.widget.BaseAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
 
+import com.youview.tinydnssd.MDNSDiscover;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;

@@ -1,4 +1,4 @@
-package com.example.slilly.tinydnssd;
+package com.youview.tinydnssd;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -162,28 +162,28 @@ public class MDNSDiscover {
         }
     }
 
-    static class Record {
-        String fqdn;
-        int ttl;
+    public static class Record {
+        public String fqdn;
+        public int ttl;
     }
 
-    static class A extends Record {
-        String ipaddr;
+    public static class A extends Record {
+        public String ipaddr;
     }
 
-    static class SRV extends Record {
-        int priority, weight, port;
-        String target;
+    public static class SRV extends Record {
+        public int priority, weight, port;
+        public String target;
     }
 
-    static class TXT extends Record {
-        Map<String, String> dict;
+    public static class TXT extends Record {
+        public Map<String, String> dict;
     }
 
-    static class Result {
-        A a;
-        SRV srv;
-        TXT txt;
+    public static class Result {
+        public A a;
+        public SRV srv;
+        public TXT txt;
     }
 
     static Result decode(byte[] packet, int packetLength) throws IOException {

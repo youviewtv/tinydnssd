@@ -1,10 +1,11 @@
-package com.example.slilly.tinydnssd;
+package com.youview.tinydnssd;
 
 import android.content.Context;
 import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
 import android.os.AsyncTask;
 import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 
 import java.io.IOException;
@@ -16,7 +17,7 @@ import java.util.Map;
 /**
  * Created by slilly on 04/08/2015.
  */
-class DiscoverResolver {
+public class DiscoverResolver {
 
     private static final String TAG = DiscoverResolver.class.getSimpleName();
     private static final int RESOLVE_TIMEOUT = 1000;
@@ -35,7 +36,7 @@ class DiscoverResolver {
     private ResolveTask mResolveTask;
     private final Map<String, NsdServiceInfo> mResolveQueue = new LinkedHashMap<>();
 
-    DiscoverResolver(Context context, String serviceType, Listener listener) {
+    public DiscoverResolver(Context context, String serviceType, Listener listener) {
         if (serviceType == null || listener == null) {
             throw new NullPointerException();
         }
@@ -44,7 +45,7 @@ class DiscoverResolver {
         mListener = listener;
     }
 
-    synchronized void start() {
+    public synchronized void start() {
         if (mStarted) {
             throw new IllegalStateException();
         }
@@ -52,7 +53,7 @@ class DiscoverResolver {
         mStarted = true;
     }
 
-    synchronized void stop() {
+    public synchronized void stop() {
         if (!mStarted) {
             throw new IllegalStateException();
         }

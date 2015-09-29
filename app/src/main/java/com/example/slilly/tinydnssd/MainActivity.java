@@ -13,6 +13,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+import com.youview.tinydnssd.DiscoverResolver;
+import com.youview.tinydnssd.MDNSDiscover;
 
 public class MainActivity extends ActionBarActivity implements DiscoverResolver.Listener {
 
