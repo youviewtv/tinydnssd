@@ -29,7 +29,7 @@ public class DiscoverResolver {
     private final NsdManager mNsdManager;
     private final String mServiceType;
     private HashMap<String, MDNSDiscover.Result> mServices = new HashMap<>();
-    private Handler mHandler = new Handler();
+    private final Handler mHandler = new Handler(Looper.getMainLooper());
     private final Listener mListener;
     private boolean mStarted;
     private boolean mDiscovering;
