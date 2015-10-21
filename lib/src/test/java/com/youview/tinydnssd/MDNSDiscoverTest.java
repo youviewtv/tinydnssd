@@ -182,7 +182,6 @@ public class MDNSDiscoverTest extends TestCase {
 
                 // 1st answer
                 .hex("04").ascii("TEST")
-
                 // now follows an infinite loop of pointers:
                 .hex("c013")    // [0011] => 0013
                 .hex("c011")    // [0013] => 0011

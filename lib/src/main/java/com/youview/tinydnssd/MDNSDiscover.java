@@ -15,7 +15,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Created by slilly on 12/05/2015.
+ * Low-level functionality for handling questions and answers over the Multicast DNS Protocol
+ * (RFC 6762), in conjunction with DNS Service Discovery (DNS-SD, RFC 6763).
  */
 public class MDNSDiscover {
 
@@ -32,11 +33,9 @@ public class MDNSDiscover {
 
     private static final boolean DEBUG = false;
 
-    public static void main(String[] args) throws IOException {
-        discover("_yv-bridge._tcp.local", null, 5000);
-//        discover("_googlecast._tcp.local", null, 5000);
-    }
-
+    /**
+     * @see #discover(String, Callback, int)
+     */
     public interface Callback {
         void onResult(Result result);
     }
@@ -70,6 +69,16 @@ public class MDNSDiscover {
         return bos.toByteArray();
     }
 
+    /**
+     * Sends a discovery packet for the specified service and listens for reply packets, notifying
+     * a callback as services are discovered.
+     * @param serviceType the type of service to query in mDNS, e.g. {@code "_example._tcp.local"}
+     * @param callback receives callbacks with {@link Result} objects as answers are decoded from
+     *                 incoming reply packets.
+     * @param timeout duration in milliseconds to wait for answer packets. If {@code 0}, this method
+     *                will listen forever.
+     * @throws IOException
+     */
     public static void discover(String serviceType, Callback callback, int timeout) throws IOException {
         if (timeout < 0) throw new IllegalArgumentException();
         InetAddress group = InetAddress.getByName(MULTICAST_GROUP_ADDRESS);
@@ -109,6 +118,15 @@ public class MDNSDiscover {
         }
     }
 
+    /**
+     * Ask for the A, SRV and TXT records of a particular service.
+     * @param serviceName the name of service to query in mDNS, e.g.
+     *                    {@code "device-1234._example._tcp.local"}
+     * @param timeout duration in milliseconds to wait for an answer packet. If {@code 0}, this
+     *                method will listen forever.
+     * @return the reply packet's decoded answer data
+     * @throws IOException
+     */
     public static Result resolve(String serviceName, int timeout) throws IOException {
         if (timeout < 0) throw new IllegalArgumentException();
         InetAddress group = InetAddress.getByName(MULTICAST_GROUP_ADDRESS);
@@ -165,23 +183,35 @@ public class MDNSDiscover {
     }
 
     public static class Record {
+        /** Fully-Qualified Domain Name of the record. */
         public String fqdn;
+        /** Time-to-live of the record, in seconds. */
         public int ttl;
     }
 
+    /** DNS A record */
     public static class A extends Record {
+        /** The IPv4 address in dot-decimal notation, e.g. {@code "192.168.1.100"} */
         public String ipaddr;
     }
 
     public static class SRV extends Record {
         public int priority, weight, port;
+        /** Fully-Qualified Domain Name of the target service. */
         public String target;
     }
 
     public static class TXT extends Record {
+        /** The content of the TXT record's key-value store decoded as a {@link Map} */
         public Map<String, String> dict;
     }
 
+    /**
+     * Represents the decoded content of the answer sections of an incoming packet.
+     * When the corresponding data is present in an answer, fields will be initialized with
+     * populated data structures. Where the no such answer is present in the packet, fields will be
+     * {@code null}.
+     */
     public static class Result {
         public A a;
         public SRV srv;
