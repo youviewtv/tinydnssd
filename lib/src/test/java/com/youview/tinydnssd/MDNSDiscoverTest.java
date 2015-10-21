@@ -2,14 +2,21 @@ package com.youview.tinydnssd;
 
 import junit.framework.TestCase;
 
+import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.junit.runners.BlockJUnit4ClassRunner;
+
 import java.io.ByteArrayOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
 import static com.youview.tinydnssd.MDNSDiscover.*;
 import static org.junit.Assert.*;
 
+@RunWith(BlockJUnit4ClassRunner.class)
 public class MDNSDiscoverTest extends TestCase {
     class ByteBuilder {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
@@ -43,6 +50,7 @@ public class MDNSDiscoverTest extends TestCase {
         }
     }
 
+    @Test
     public void testDiscoverPacket() throws IOException {
         byte[] actual = queryPacket("_example._tcp.local", QCLASS_INTERNET | CLASS_FLAG_UNICAST, QTYPE_PTR);
         byte[] expected = new ByteBuilder()
@@ -55,6 +63,7 @@ public class MDNSDiscoverTest extends TestCase {
         assertArrayEquals(expected, actual);
     }
 
+    @Test
     public void testResolvePacket() throws IOException {
         byte[] actual = queryPacket("device-1234._example._tcp.local", QCLASS_INTERNET | CLASS_FLAG_UNICAST, QTYPE_TXT, QTYPE_SRV);
         byte[] expected = new ByteBuilder()
@@ -67,9 +76,83 @@ public class MDNSDiscoverTest extends TestCase {
                 .build();
         assertArrayEquals(expected, actual);
     }
-    
+
+    @Test
     public void testReplyPacket() throws IOException {
+        byte[] packet = createReplyPacket();
+        Result r = decode(packet, packet.length);
+
+        // check A record
+        assertEquals("192.168.1.100", r.a.ipaddr);
+        assertEquals("dev0123456789.local", r.a.fqdn);
+        assertEquals(10, r.a.ttl);
+
+        // check SRV record
+        assertEquals(0, r.srv.priority);
+        assertEquals(0, r.srv.weight);
+        assertEquals(1234, r.srv.port);
+        assertEquals("dev0123456789.local", r.srv.target);
+        assertEquals("device-1234._example._tcp.local", r.srv.fqdn);
+        assertEquals(10, r.srv.ttl);
+
+        // check TXT record
+        Map<String, String> expectedTxt = new HashMap<>();
+        expectedTxt.put("foo", "bar");
+        expectedTxt.put("bar", null);
+        expectedTxt.put("txtvers", "1");
+        assertEquals(expectedTxt, r.txt.dict);
+        assertEquals("device-1234._example._tcp.local", r.txt.fqdn);
+        assertEquals(10, r.txt.ttl);
+    }
+
+    @Test
+    public void testTruncatedReplyPacketsWithResizedArray() {
+        byte[] packet = createReplyPacket();
+        for (int truncatedLength = 0; truncatedLength < packet.length; truncatedLength++) {
+            byte[] truncatedPacket = Arrays.copyOf(packet, truncatedLength);
+            try {
+                decode(truncatedPacket, truncatedPacket.length);
+                fail("decoding a truncated packet did not throw IOException");
+            } catch (IOException e) {
+                // this is OK...
+            }
+        }
+    }
+
+    @Test
+    public void testTruncatedReplyPacketsWithOriginalArray() {
+        byte[] packet = createReplyPacket();
+        for (int truncatedLength = 0; truncatedLength < packet.length; truncatedLength++) {
+            try {
+                decode(packet, truncatedLength);
+                fail("decoding a truncated packet did not throw IOException");
+            } catch (IOException e) {
+                // this is OK...
+            }
+        }
+    }
+
+    @Test(expected=EOFException.class)
+    public void testAbortOnPointerOutOfRange() throws IOException {
         byte[] packet = new ByteBuilder()
+                .hex("0000 8400")
+                .hex("0000") // 0 questions
+                .hex("0001") // 1 answer
+                .hex("0000") // 0 authority RRs
+                .hex("0000") // 0 additional RRs
+
+                // 1st answer
+                .hex("04").ascii("TEST")
+                .hex("ffff")
+                .hex("0001 0001")   // type=A, aclass=INTERNET
+                .hex("0000000a 0004")   // ttl=10, length=4
+                .hex("c0 a8 01 64")    // 192.168.1.100
+                .build();
+        decode(packet, packet.length);
+    }
+
+    private byte[] createReplyPacket() {
+        return new ByteBuilder()
                 .hex("0000 8400")
                 .hex("0002") // 2 questions
                 .hex("0003") // 3 answers
@@ -111,29 +194,5 @@ public class MDNSDiscoverTest extends TestCase {
                 .hex("0b").ascii("foo=ignored")    // the FIRST instance of foo takes precedence
                 .hex("09").ascii("txtvers=1")
                 .build();
-
-        Result r = decode(packet, packet.length);
-
-        // check A record
-        assertEquals("192.168.1.100", r.a.ipaddr);
-        assertEquals("dev0123456789.local", r.a.fqdn);
-        assertEquals(10, r.a.ttl);
-
-        // check SRV record
-        assertEquals(0, r.srv.priority);
-        assertEquals(0, r.srv.weight);
-        assertEquals(1234, r.srv.port);
-        assertEquals("dev0123456789.local", r.srv.target);
-        assertEquals("device-1234._example._tcp.local", r.srv.fqdn);
-        assertEquals(10, r.srv.ttl);
-
-        // check TXT record
-        Map<String, String> expectedTxt = new HashMap<>();
-        expectedTxt.put("foo", "bar");
-        expectedTxt.put("bar", null);
-        expectedTxt.put("txtvers", "1");
-        assertEquals(expectedTxt, r.txt.dict);
-        assertEquals("device-1234._example._tcp.local", r.txt.fqdn);
-        assertEquals(10, r.txt.ttl);
     }
 }
