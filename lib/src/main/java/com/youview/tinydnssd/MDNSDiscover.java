@@ -313,22 +313,38 @@ public class MDNSDiscover {
         StringBuilder result = new StringBuilder();
         boolean dot = false;
         while (true) {
-            int length = dis.readUnsignedByte();
-            if (length == 0) break;
+            int pointerHopCount = 0;
+            int length;
+            while (true) {
+                length = dis.readUnsignedByte();
+                if (length == 0) return result.toString();
             if ((length & 0xc0) == 0xc0) {
                 // this is a compression method, the remainder of the string is a pointer to elsewhere in the packet
                 // adjust the stream boundary and repeat processing
+                    if ((++pointerHopCount) * 2 >= packetLength) {
+                        // We must have visited one of the possible pointers more than once => cycle
+                        // this doesn't add to the domain length, but decoding would be non-terminating
+                        throw new IOException("cyclic empty references in domain name");
+                    }
                 length &= 0x3f;
                 int offset = (length << 8) | dis.readUnsignedByte();
                 dis = new DataInputStream(new ByteArrayInputStream(packet, offset, packetLength - offset));
-                continue;
+                } else {
+                    break;
+                }
             }
             byte[] segment = new byte[length];
             dis.readFully(segment);
             if (dot) result.append('.');
             dot = true;
             result.append(new String(segment));
+            if (result.length() > packetLength) {
+                // If we get here, we must be following cyclic references, since non-cyclic
+                // references can't encode a domain name longer than the total length of the packet.
+                // The domain name would be infinitely long, so abort now rather than consume
+                // maximum heap.
+                throw new IOException("cyclic non-empty references in domain name");
+            }
         }
-        return result.toString();
     }
 }

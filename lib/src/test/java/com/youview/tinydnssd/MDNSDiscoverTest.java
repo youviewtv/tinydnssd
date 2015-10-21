@@ -12,6 +12,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
 
 import static com.youview.tinydnssd.MDNSDiscover.*;
 import static org.junit.Assert.*;
@@ -149,6 +150,66 @@ public class MDNSDiscoverTest extends TestCase {
                 .hex("c0 a8 01 64")    // 192.168.1.100
                 .build();
         decode(packet, packet.length);
+    }
+
+    @Test(expected=IOException.class)
+    public void testAbortOnInfiniteDomainName() throws IOException {
+        byte[] packet = new ByteBuilder()
+                .hex("0000 8400")
+                .hex("0000") // 0 questions
+                .hex("0001") // 1 answer
+                .hex("0000") // 0 authority RRs
+                .hex("0000") // 0 additional RRs
+
+                // 1st answer
+                .hex("04").ascii("TEST")
+                .hex("c00c")    // pointer to "TEST" => this encodes the infinite domain "TEST.TEST.TEST..."
+                .hex("0001 0001")   // type=A, aclass=INTERNET
+                .hex("0000000a 0004")   // ttl=10, length=4
+                .hex("c0 a8 01 64")    // 192.168.1.100
+                .build();
+        decode(packet, packet.length);
+    }
+
+    @Test(expected=IOException.class)
+    public void testAbortOnCyclicEmptyDomainName() throws IOException {
+        byte[] packet = new ByteBuilder()
+                .hex("0000 8400")
+                .hex("0000") // 0 questions
+                .hex("0001") // 1 answer
+                .hex("0000") // 0 authority RRs
+                .hex("0000") // 0 additional RRs
+
+                // 1st answer
+                .hex("04").ascii("TEST")
+
+                // now follows an infinite loop of pointers:
+                .hex("c013")    // [0011] => 0013
+                .hex("c011")    // [0013] => 0011
+                .hex("0001 0001")   // type=A, aclass=INTERNET
+                .hex("0000000a 0004")   // ttl=10, length=4
+                .hex("c0 a8 01 64")    // 192.168.1.100
+                .build();
+        decode(packet, packet.length);
+    }
+
+    @Test
+    public void testDecodeRandomPackets() {
+        final int SEED = 0x5FC45975;
+        final int NUM_PACKETS = 10000;
+        final int MAX_PACKET_LENGTH = 1536;
+        Random random = new Random(SEED);
+        for (int i = 0; i < NUM_PACKETS; i++) {
+            int packetLength = random.nextInt(MAX_PACKET_LENGTH+1);
+            byte[] packet = new byte[packetLength];
+            random.nextBytes(packet);
+            try {
+                decode(packet, packetLength);
+                fail("decoding a random packet did not throw IOException");
+            } catch (IOException e) {
+                // this is OK...
+            }
+        }
     }
 
     private byte[] createReplyPacket() {
