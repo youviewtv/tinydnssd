@@ -30,6 +30,8 @@ public class MDNSDiscover {
 
     private static final String MULTICAST_GROUP_ADDRESS = "224.0.0.251";
 
+    private static final boolean DEBUG = false;
+
     public static void main(String[] args) throws IOException {
         discover("_yv-bridge._tcp.local", null, 5000);
 //        discover("_googlecast._tcp.local", null, 5000);
@@ -72,10 +74,10 @@ public class MDNSDiscover {
         if (timeout < 0) throw new IllegalArgumentException();
         InetAddress group = InetAddress.getByName(MULTICAST_GROUP_ADDRESS);
         MulticastSocket sock = new MulticastSocket();   // binds to a random free source port
-        System.out.println("Source port is " + sock.getLocalPort());
+        if (DEBUG) System.out.println("Source port is " + sock.getLocalPort());
         byte[] data = discoverPacket(serviceType);
-        System.out.println("Query packet:");
-        hexdump(data, 0, data.length);
+        if (DEBUG) System.out.println("Query packet:");
+        if (DEBUG) hexdump(data, 0, data.length);
         DatagramPacket packet = new DatagramPacket(data, data.length, group, PORT);
         sock.setTimeToLive(255);
         sock.send(packet);
@@ -98,8 +100,8 @@ public class MDNSDiscover {
             } catch (SocketTimeoutException e) {
                 break;
             }
-            System.out.println("\n\nIncoming packet:");
-            hexdump(packet.getData(), 0, packet.getLength());
+            if (DEBUG) System.out.println("\n\nIncoming packet:");
+            if (DEBUG) hexdump(packet.getData(), 0, packet.getLength());
             Result result = decode(packet.getData(), packet.getLength());
             if (callback != null) {
                 callback.onResult(result);
@@ -111,10 +113,10 @@ public class MDNSDiscover {
         if (timeout < 0) throw new IllegalArgumentException();
         InetAddress group = InetAddress.getByName(MULTICAST_GROUP_ADDRESS);
         MulticastSocket sock = new MulticastSocket();   // binds to a random free source port
-        System.out.println("Source port is " + sock.getLocalPort());
-        System.out.println("Query packet:");
+        if (DEBUG) System.out.println("Source port is " + sock.getLocalPort());
+        if (DEBUG) System.out.println("Query packet:");
         byte[] data = queryPacket(serviceName, QCLASS_INTERNET | CLASS_FLAG_UNICAST, QTYPE_TXT, QTYPE_SRV);
-        hexdump(data, 0, data.length);
+        if (DEBUG) hexdump(data, 0, data.length);
         DatagramPacket packet = new DatagramPacket(data, data.length, group, PORT);
         sock.setTimeToLive(255);
         sock.send(packet);
@@ -122,8 +124,8 @@ public class MDNSDiscover {
         packet = new DatagramPacket(buf, buf.length);
         sock.setSoTimeout(timeout);
         sock.receive(packet);
-        System.out.println("\n\nIncoming packet:");
-        hexdump(packet.getData(), 0, packet.getLength());
+        if (DEBUG) System.out.println("\n\nIncoming packet:");
+        if (DEBUG) hexdump(packet.getData(), 0, packet.getLength());
         return decode(packet.getData(), packet.getLength());
     }
 
@@ -206,8 +208,8 @@ public class MDNSDiscover {
             String fqdn = decodeFQDN(dis, packet, packetLength);
             short type = dis.readShort();
             short aclass = dis.readShort();
-            System.out.printf("%s record%n", typeString(type));
-            System.out.println("Name: " + fqdn);
+            if (DEBUG) System.out.printf("%s record%n", typeString(type));
+            if (DEBUG) System.out.println("Name: " + fqdn);
             int ttl = dis.readInt();
             int length = dis.readUnsignedShort();
             byte[] data = new byte[length];
@@ -221,13 +223,13 @@ public class MDNSDiscover {
                     record = result.srv = decodeSRV(data, packet, packetLength);
                     break;
                 case QTYPE_PTR:
-                    System.out.println(decodePTR(data, packet, packetLength));
+                    decodePTR(data, packet, packetLength);
                     break;
                 case QTYPE_TXT:
                     record = result.txt = decodeTXT(data);
                     break;
                 default:
-                    hexdump(data, 0, data.length);
+                    if (DEBUG) hexdump(data, 0, data.length);
                     break;
             }
             if (record != null) {
@@ -245,7 +247,7 @@ public class MDNSDiscover {
         srv.weight = dis.readUnsignedShort();
         srv.port = dis.readUnsignedShort();
         srv.target = decodeFQDN(dis, packetData, packetLength);
-        System.out.printf("Priority: %d Weight: %d Port: %d Target: %s%n", srv.priority, srv.weight, srv.port, srv.target);
+        if (DEBUG) System.out.printf("Priority: %d Weight: %d Port: %d Target: %s%n", srv.priority, srv.weight, srv.port, srv.target);
         return srv;
     }
 
@@ -266,14 +268,16 @@ public class MDNSDiscover {
 
     private static String decodePTR(byte[] ptrData, byte[] packet, int packetLength) throws IOException {
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(ptrData));
-        return decodeFQDN(dis, packet, packetLength);
+        String fqdn = decodeFQDN(dis, packet, packetLength);
+        if (DEBUG) System.out.println(fqdn);
+        return fqdn;
     }
 
     private static A decodeA(byte[] data) throws IOException {
         if (data.length < 4) throw new IOException("expected 4 bytes for IPv4 addr");
         A a = new A();
         a.ipaddr = (data[0] & 0xFF) + "." + (data[1] & 0xFF) + "." + (data[2] & 0xFF) + "." + (data[3] & 0xFF);
-        System.out.println("Ipaddr: " + a.ipaddr);
+        if (DEBUG) System.out.println("Ipaddr: " + a.ipaddr);
         return a;
     }
 
@@ -299,7 +303,7 @@ public class MDNSDiscover {
             } else {
                 key = segment;
             }
-            System.out.println(key + "=" + value);
+            if (DEBUG) System.out.println(key + "=" + value);
             if (!txt.dict.containsKey(key)) {
                 // from RFC6763
                 // If a client receives a TXT record containing the same key more than once, then
