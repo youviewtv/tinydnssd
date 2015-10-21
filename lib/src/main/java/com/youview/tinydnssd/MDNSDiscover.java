@@ -20,12 +20,12 @@ import java.util.Map;
 public class MDNSDiscover {
 
     private static final short QTYPE_A   = 0x0001;
-    private static final short QTYPE_PTR = 0x000c;
-    private static final short QTYPE_TXT = 0x0010;
-    private static final short QTYPE_SRV = 0x0021;
+    static final short QTYPE_PTR = 0x000c;
+    static final short QTYPE_TXT = 0x0010;
+    static final short QTYPE_SRV = 0x0021;
 
-    private static final short QCLASS_INTERNET = 0x0001;
-    private static final short CLASS_FLAG_MULTICAST = 0, CLASS_FLAG_UNICAST = (short) 0x8000;
+    static final short QCLASS_INTERNET = 0x0001;
+    static final short CLASS_FLAG_MULTICAST = 0, CLASS_FLAG_UNICAST = (short) 0x8000;
     private static final int PORT = 5353;
 
     private static final String MULTICAST_GROUP_ADDRESS = "224.0.0.251";
@@ -43,7 +43,7 @@ public class MDNSDiscover {
         return queryPacket(serviceType, QCLASS_INTERNET | CLASS_FLAG_UNICAST, QTYPE_PTR);
     }
 
-    private static byte[] queryPacket(String serviceName, int qclass, int... qtypes) throws IOException {
+    static byte[] queryPacket(String serviceName, int qclass, int... qtypes) throws IOException {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(bos);
         dos.writeInt(0);
