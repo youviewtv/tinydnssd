@@ -27,4 +27,7 @@ android.libraryVariants.all { variant ->
 
 dependencies {
     testCompile 'junit:junit:4.12'
+
+    androidTestCompile 'junit:junit:4.12'
+    androidTestCompile 'com.google.dexmaker:dexmaker-mockito:1.2'
 }

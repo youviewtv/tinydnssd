@@ -26,21 +26,21 @@ public class DiscoverResolver {
         void onServicesChanged(Map<String, MDNSDiscover.Result> services);
     }
 
-    private final NsdManager mNsdManager;
+    private final Context mContext;
     private final String mServiceType;
     private HashMap<String, MDNSDiscover.Result> mServices = new HashMap<>();
     private final Handler mHandler = new Handler(Looper.getMainLooper());
     private final Listener mListener;
     private boolean mStarted;
-    private boolean mDiscovering;
+    private boolean mStarting;
     private ResolveTask mResolveTask;
     private final Map<String, NsdServiceInfo> mResolveQueue = new LinkedHashMap<>();
 
     public DiscoverResolver(Context context, String serviceType, Listener listener) {
-        if (serviceType == null || listener == null) {
+        if (context == null || serviceType == null || listener == null) {
             throw new NullPointerException();
         }
-        mNsdManager = (NsdManager) context.getSystemService(Context.NSD_SERVICE);
+        mContext = context;
         mServiceType = serviceType;
         mListener = listener;
     }
@@ -49,7 +49,10 @@ public class DiscoverResolver {
         if (mStarted) {
             throw new IllegalStateException();
         }
-        mNsdManager.discoverServices(mServiceType, NsdManager.PROTOCOL_DNS_SD, mDiscoveryListener);
+        if (!mStarting) {
+            discoverServices(mServiceType, NsdManager.PROTOCOL_DNS_SD, mDiscoveryListener);
+            mStarting = true;
+        }
         mStarted = true;
     }
 
@@ -57,13 +60,26 @@ public class DiscoverResolver {
         if (!mStarted) {
             throw new IllegalStateException();
         }
-        if (mDiscovering) {
-            mNsdManager.stopServiceDiscovery(mDiscoveryListener);
+        if (!mStarting) {
+            stopServiceDiscovery(mDiscoveryListener);
+            mStarting = false;
         }
         synchronized (mResolveQueue) {
             mResolveQueue.clear();
         }
         mStarted = false;
+    }
+
+    // default implementation is to delegate to NsdManager
+    // tests can stub this to mock the NsdManager
+    public void discoverServices(String serviceType, int protocol, NsdManager.DiscoveryListener listener) {
+        ((NsdManager) mContext.getSystemService(Context.NSD_SERVICE)).discoverServices(serviceType, protocol, listener);
+    }
+
+    // default implementation is to delegate to NsdManager
+    // tests can stub this to mock the NsdManager
+    public void stopServiceDiscovery(NsdManager.DiscoveryListener listener) {
+        ((NsdManager) mContext.getSystemService(Context.NSD_SERVICE)).stopServiceDiscovery(listener);
     }
 
     private NsdManager.DiscoveryListener mDiscoveryListener = new NsdManager.DiscoveryListener() {
@@ -81,10 +97,9 @@ public class DiscoverResolver {
         public void onDiscoveryStarted(String serviceType) {
             Log.d(TAG, "onDiscoveryStarted() serviceType = [" + serviceType + "]");
             synchronized (DiscoverResolver.this) {
-                if (mStarted) {
-                    mDiscovering = true;
-                } else {
-                    mNsdManager.stopServiceDiscovery(this);
+                mStarting = false;
+                if (!mStarted) {
+                    stopServiceDiscovery(this);
                 }
             }
         }
