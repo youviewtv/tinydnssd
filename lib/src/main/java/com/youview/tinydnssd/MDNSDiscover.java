@@ -352,17 +352,17 @@ public class MDNSDiscover {
             while (true) {
                 length = dis.readUnsignedByte();
                 if (length == 0) return result.toString();
-            if ((length & 0xc0) == 0xc0) {
-                // this is a compression method, the remainder of the string is a pointer to elsewhere in the packet
-                // adjust the stream boundary and repeat processing
+                if ((length & 0xc0) == 0xc0) {
+                    // this is a compression method, the remainder of the string is a pointer to elsewhere in the packet
+                    // adjust the stream boundary and repeat processing
                     if ((++pointerHopCount) * 2 >= packetLength) {
                         // We must have visited one of the possible pointers more than once => cycle
                         // this doesn't add to the domain length, but decoding would be non-terminating
                         throw new IOException("cyclic empty references in domain name");
                     }
-                length &= 0x3f;
-                int offset = (length << 8) | dis.readUnsignedByte();
-                dis = new DataInputStream(new ByteArrayInputStream(packet, offset, packetLength - offset));
+                    length &= 0x3f;
+                    int offset = (length << 8) | dis.readUnsignedByte();
+                    dis = new DataInputStream(new ByteArrayInputStream(packet, offset, packetLength - offset));
                 } else {
                     break;
                 }
