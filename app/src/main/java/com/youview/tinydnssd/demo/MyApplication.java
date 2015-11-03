@@ -18,7 +18,7 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-package com.youview.tinydnssd;
+package com.youview.tinydnssd.demo;
 
 import android.app.Application;
 import android.os.StrictMode;

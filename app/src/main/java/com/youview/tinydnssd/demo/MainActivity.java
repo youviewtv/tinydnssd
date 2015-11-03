@@ -18,7 +18,7 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-package com.youview.tinydnssd;
+package com.youview.tinydnssd.demo;
 
 import android.os.Bundle;
 import android.support.v7.app.ActionBarActivity;
@@ -27,6 +27,9 @@ import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
+
+import com.youview.tinydnssd.DiscoverResolver;
+import com.youview.tinydnssd.MDNSDiscover;
 
 import java.util.ArrayList;
 import java.util.Collections;
