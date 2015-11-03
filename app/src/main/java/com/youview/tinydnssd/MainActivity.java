@@ -18,7 +18,7 @@
  * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-package com.example.slilly.tinydnssd;
+package com.youview.tinydnssd;
 
 import android.os.Bundle;
 import android.support.v7.app.ActionBarActivity;
@@ -32,9 +32,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-
-import com.youview.tinydnssd.DiscoverResolver;
-import com.youview.tinydnssd.MDNSDiscover;
 
 public class MainActivity extends ActionBarActivity implements DiscoverResolver.Listener {
 
