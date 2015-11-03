@@ -229,7 +229,7 @@ public class MDNSDiscover {
     /**
      * Represents the decoded content of the answer sections of an incoming packet.
      * When the corresponding data is present in an answer, fields will be initialized with
-     * populated data structures. Where the no such answer is present in the packet, fields will be
+     * populated data structures. When no such answer is present in the packet, fields will be
      * {@code null}.
      */
     public static class Result {
