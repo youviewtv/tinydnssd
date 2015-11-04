@@ -15,26 +15,27 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Created by slilly on 12/05/2015.
+ * Low-level functionality for handling questions and answers over the Multicast DNS Protocol
+ * (RFC 6762), in conjunction with DNS Service Discovery (DNS-SD, RFC 6763).
  */
 public class MDNSDiscover {
 
     private static final short QTYPE_A   = 0x0001;
-    private static final short QTYPE_PTR = 0x000c;
-    private static final short QTYPE_TXT = 0x0010;
-    private static final short QTYPE_SRV = 0x0021;
+    static final short QTYPE_PTR = 0x000c;
+    static final short QTYPE_TXT = 0x0010;
+    static final short QTYPE_SRV = 0x0021;
 
-    private static final short QCLASS_INTERNET = 0x0001;
-    private static final short CLASS_FLAG_MULTICAST = 0, CLASS_FLAG_UNICAST = (short) 0x8000;
+    static final short QCLASS_INTERNET = 0x0001;
+    static final short CLASS_FLAG_MULTICAST = 0, CLASS_FLAG_UNICAST = (short) 0x8000;
     private static final int PORT = 5353;
 
     private static final String MULTICAST_GROUP_ADDRESS = "224.0.0.251";
 
-    public static void main(String[] args) throws IOException {
-        discover("_yv-bridge._tcp.local", null, 5000);
-//        discover("_googlecast._tcp.local", null, 5000);
-    }
+    private static final boolean DEBUG = false;
 
+    /**
+     * @see #discover(String, Callback, int)
+     */
     public interface Callback {
         void onResult(Result result);
     }
@@ -43,7 +44,7 @@ public class MDNSDiscover {
         return queryPacket(serviceType, QCLASS_INTERNET | CLASS_FLAG_UNICAST, QTYPE_PTR);
     }
 
-    private static byte[] queryPacket(String serviceName, int qclass, int... qtypes) throws IOException {
+    static byte[] queryPacket(String serviceName, int qclass, int... qtypes) throws IOException {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         DataOutputStream dos = new DataOutputStream(bos);
         dos.writeInt(0);
@@ -68,14 +69,24 @@ public class MDNSDiscover {
         return bos.toByteArray();
     }
 
+    /**
+     * Sends a discovery packet for the specified service and listens for reply packets, notifying
+     * a callback as services are discovered.
+     * @param serviceType the type of service to query in mDNS, e.g. {@code "_example._tcp.local"}
+     * @param callback receives callbacks with {@link Result} objects as answers are decoded from
+     *                 incoming reply packets.
+     * @param timeout duration in milliseconds to wait for answer packets. If {@code 0}, this method
+     *                will listen forever.
+     * @throws IOException
+     */
     public static void discover(String serviceType, Callback callback, int timeout) throws IOException {
         if (timeout < 0) throw new IllegalArgumentException();
         InetAddress group = InetAddress.getByName(MULTICAST_GROUP_ADDRESS);
         MulticastSocket sock = new MulticastSocket();   // binds to a random free source port
-        System.out.println("Source port is " + sock.getLocalPort());
+        if (DEBUG) System.out.println("Source port is " + sock.getLocalPort());
         byte[] data = discoverPacket(serviceType);
-        System.out.println("Query packet:");
-        hexdump(data, 0, data.length);
+        if (DEBUG) System.out.println("Query packet:");
+        if (DEBUG) hexdump(data, 0, data.length);
         DatagramPacket packet = new DatagramPacket(data, data.length, group, PORT);
         sock.setTimeToLive(255);
         sock.send(packet);
@@ -98,8 +109,8 @@ public class MDNSDiscover {
             } catch (SocketTimeoutException e) {
                 break;
             }
-            System.out.println("\n\nIncoming packet:");
-            hexdump(packet.getData(), 0, packet.getLength());
+            if (DEBUG) System.out.println("\n\nIncoming packet:");
+            if (DEBUG) hexdump(packet.getData(), 0, packet.getLength());
             Result result = decode(packet.getData(), packet.getLength());
             if (callback != null) {
                 callback.onResult(result);
@@ -107,14 +118,23 @@ public class MDNSDiscover {
         }
     }
 
+    /**
+     * Ask for the A, SRV and TXT records of a particular service.
+     * @param serviceName the name of service to query in mDNS, e.g.
+     *                    {@code "device-1234._example._tcp.local"}
+     * @param timeout duration in milliseconds to wait for an answer packet. If {@code 0}, this
+     *                method will listen forever.
+     * @return the reply packet's decoded answer data
+     * @throws IOException
+     */
     public static Result resolve(String serviceName, int timeout) throws IOException {
         if (timeout < 0) throw new IllegalArgumentException();
         InetAddress group = InetAddress.getByName(MULTICAST_GROUP_ADDRESS);
         MulticastSocket sock = new MulticastSocket();   // binds to a random free source port
-        System.out.println("Source port is " + sock.getLocalPort());
-        System.out.println("Query packet:");
+        if (DEBUG) System.out.println("Source port is " + sock.getLocalPort());
+        if (DEBUG) System.out.println("Query packet:");
         byte[] data = queryPacket(serviceName, QCLASS_INTERNET | CLASS_FLAG_UNICAST, QTYPE_TXT, QTYPE_SRV);
-        hexdump(data, 0, data.length);
+        if (DEBUG) hexdump(data, 0, data.length);
         DatagramPacket packet = new DatagramPacket(data, data.length, group, PORT);
         sock.setTimeToLive(255);
         sock.send(packet);
@@ -122,8 +142,8 @@ public class MDNSDiscover {
         packet = new DatagramPacket(buf, buf.length);
         sock.setSoTimeout(timeout);
         sock.receive(packet);
-        System.out.println("\n\nIncoming packet:");
-        hexdump(packet.getData(), 0, packet.getLength());
+        if (DEBUG) System.out.println("\n\nIncoming packet:");
+        if (DEBUG) hexdump(packet.getData(), 0, packet.getLength());
         return decode(packet.getData(), packet.getLength());
     }
 
@@ -163,23 +183,35 @@ public class MDNSDiscover {
     }
 
     public static class Record {
+        /** Fully-Qualified Domain Name of the record. */
         public String fqdn;
+        /** Time-to-live of the record, in seconds. */
         public int ttl;
     }
 
+    /** DNS A record */
     public static class A extends Record {
+        /** The IPv4 address in dot-decimal notation, e.g. {@code "192.168.1.100"} */
         public String ipaddr;
     }
 
     public static class SRV extends Record {
         public int priority, weight, port;
+        /** Fully-Qualified Domain Name of the target service. */
         public String target;
     }
 
     public static class TXT extends Record {
+        /** The content of the TXT record's key-value store decoded as a {@link Map} */
         public Map<String, String> dict;
     }
 
+    /**
+     * Represents the decoded content of the answer sections of an incoming packet.
+     * When the corresponding data is present in an answer, fields will be initialized with
+     * populated data structures. Where the no such answer is present in the packet, fields will be
+     * {@code null}.
+     */
     public static class Result {
         public A a;
         public SRV srv;
@@ -206,8 +238,8 @@ public class MDNSDiscover {
             String fqdn = decodeFQDN(dis, packet, packetLength);
             short type = dis.readShort();
             short aclass = dis.readShort();
-            System.out.printf("%s record%n", typeString(type));
-            System.out.println("Name: " + fqdn);
+            if (DEBUG) System.out.printf("%s record%n", typeString(type));
+            if (DEBUG) System.out.println("Name: " + fqdn);
             int ttl = dis.readInt();
             int length = dis.readUnsignedShort();
             byte[] data = new byte[length];
@@ -221,13 +253,13 @@ public class MDNSDiscover {
                     record = result.srv = decodeSRV(data, packet, packetLength);
                     break;
                 case QTYPE_PTR:
-                    System.out.println(decodePTR(data, packet, packetLength));
+                    decodePTR(data, packet, packetLength);
                     break;
                 case QTYPE_TXT:
                     record = result.txt = decodeTXT(data);
                     break;
                 default:
-                    hexdump(data, 0, data.length);
+                    if (DEBUG) hexdump(data, 0, data.length);
                     break;
             }
             if (record != null) {
@@ -245,7 +277,7 @@ public class MDNSDiscover {
         srv.weight = dis.readUnsignedShort();
         srv.port = dis.readUnsignedShort();
         srv.target = decodeFQDN(dis, packetData, packetLength);
-        System.out.printf("Priority: %d Weight: %d Port: %d Target: %s%n", srv.priority, srv.weight, srv.port, srv.target);
+        if (DEBUG) System.out.printf("Priority: %d Weight: %d Port: %d Target: %s%n", srv.priority, srv.weight, srv.port, srv.target);
         return srv;
     }
 
@@ -266,14 +298,16 @@ public class MDNSDiscover {
 
     private static String decodePTR(byte[] ptrData, byte[] packet, int packetLength) throws IOException {
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(ptrData));
-        return decodeFQDN(dis, packet, packetLength);
+        String fqdn = decodeFQDN(dis, packet, packetLength);
+        if (DEBUG) System.out.println(fqdn);
+        return fqdn;
     }
 
     private static A decodeA(byte[] data) throws IOException {
         if (data.length < 4) throw new IOException("expected 4 bytes for IPv4 addr");
         A a = new A();
         a.ipaddr = (data[0] & 0xFF) + "." + (data[1] & 0xFF) + "." + (data[2] & 0xFF) + "." + (data[3] & 0xFF);
-        System.out.println("Ipaddr: " + a.ipaddr);
+        if (DEBUG) System.out.println("Ipaddr: " + a.ipaddr);
         return a;
     }
 
@@ -299,7 +333,7 @@ public class MDNSDiscover {
             } else {
                 key = segment;
             }
-            System.out.println(key + "=" + value);
+            if (DEBUG) System.out.println(key + "=" + value);
             if (!txt.dict.containsKey(key)) {
                 // from RFC6763
                 // If a client receives a TXT record containing the same key more than once, then
@@ -313,22 +347,38 @@ public class MDNSDiscover {
         StringBuilder result = new StringBuilder();
         boolean dot = false;
         while (true) {
-            int length = dis.readUnsignedByte();
-            if (length == 0) break;
+            int pointerHopCount = 0;
+            int length;
+            while (true) {
+                length = dis.readUnsignedByte();
+                if (length == 0) return result.toString();
             if ((length & 0xc0) == 0xc0) {
                 // this is a compression method, the remainder of the string is a pointer to elsewhere in the packet
                 // adjust the stream boundary and repeat processing
+                    if ((++pointerHopCount) * 2 >= packetLength) {
+                        // We must have visited one of the possible pointers more than once => cycle
+                        // this doesn't add to the domain length, but decoding would be non-terminating
+                        throw new IOException("cyclic empty references in domain name");
+                    }
                 length &= 0x3f;
                 int offset = (length << 8) | dis.readUnsignedByte();
                 dis = new DataInputStream(new ByteArrayInputStream(packet, offset, packetLength - offset));
-                continue;
+                } else {
+                    break;
+                }
             }
             byte[] segment = new byte[length];
             dis.readFully(segment);
             if (dot) result.append('.');
             dot = true;
             result.append(new String(segment));
+            if (result.length() > packetLength) {
+                // If we get here, we must be following cyclic references, since non-cyclic
+                // references can't encode a domain name longer than the total length of the packet.
+                // The domain name would be infinitely long, so abort now rather than consume
+                // maximum heap.
+                throw new IOException("cyclic non-empty references in domain name");
+            }
         }
-        return result.toString();
     }
 }

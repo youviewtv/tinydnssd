@@ -1,7 +1,9 @@
 package com.example.slilly.tinydnssd;
 
+import android.content.Context;
 import android.os.Bundle;
 import android.support.v7.app.ActionBarActivity;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
@@ -58,6 +60,22 @@ public class MainActivity extends ActionBarActivity implements DiscoverResolver.
     protected void onResume() {
         super.onResume();
         mDiscoverResolver.start();
+
+        Context context = this;
+
+        DiscoverResolver resolver = new DiscoverResolver(context, "_googlecast._tcp",
+                new DiscoverResolver.Listener() {
+                    @Override
+                    public void onServicesChanged(Map<String, MDNSDiscover.Result> services) {
+                        for (MDNSDiscover.Result result : services.values()) {
+                            // access the model description from the TXT record
+                            String model = result.txt.dict.get("md");
+                            String location = result.a.ipaddr + ":" + result.srv.port;
+                            Log.d(TAG, model + " -> " + location);
+                        }
+                    }
+                });
+        resolver.start();
     }
 
     @Override
