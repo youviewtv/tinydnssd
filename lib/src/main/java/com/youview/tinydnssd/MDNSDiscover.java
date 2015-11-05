@@ -1,3 +1,23 @@
+/* Copyright (c) 2015 YouView Ltd
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy of
+ * this software and associated documentation files (the "Software"), to deal in
+ * the Software without restriction, including without limitation the rights to
+ * use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of
+ * the Software, and to permit persons to whom the Software is furnished to do so,
+ * subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS
+ * FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR
+ * COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+ * IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+ * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ */
+
 package com.youview.tinydnssd;
 
 import java.io.ByteArrayInputStream;
@@ -209,7 +229,7 @@ public class MDNSDiscover {
     /**
      * Represents the decoded content of the answer sections of an incoming packet.
      * When the corresponding data is present in an answer, fields will be initialized with
-     * populated data structures. Where the no such answer is present in the packet, fields will be
+     * populated data structures. When no such answer is present in the packet, fields will be
      * {@code null}.
      */
     public static class Result {
@@ -352,17 +372,17 @@ public class MDNSDiscover {
             while (true) {
                 length = dis.readUnsignedByte();
                 if (length == 0) return result.toString();
-            if ((length & 0xc0) == 0xc0) {
-                // this is a compression method, the remainder of the string is a pointer to elsewhere in the packet
-                // adjust the stream boundary and repeat processing
+                if ((length & 0xc0) == 0xc0) {
+                    // this is a compression method, the remainder of the string is a pointer to elsewhere in the packet
+                    // adjust the stream boundary and repeat processing
                     if ((++pointerHopCount) * 2 >= packetLength) {
                         // We must have visited one of the possible pointers more than once => cycle
                         // this doesn't add to the domain length, but decoding would be non-terminating
                         throw new IOException("cyclic empty references in domain name");
                     }
-                length &= 0x3f;
-                int offset = (length << 8) | dis.readUnsignedByte();
-                dis = new DataInputStream(new ByteArrayInputStream(packet, offset, packetLength - offset));
+                    length &= 0x3f;
+                    int offset = (length << 8) | dis.readUnsignedByte();
+                    dis = new DataInputStream(new ByteArrayInputStream(packet, offset, packetLength - offset));
                 } else {
                     break;
                 }

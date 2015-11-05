@@ -5,7 +5,7 @@ android {
     buildToolsVersion "22.0.0"
 
     defaultConfig {
-        applicationId "com.example.slilly.nsddemo"
+        applicationId "com.youview.tinydnssd.demo"
         minSdkVersion 16
         targetSdkVersion 22
         versionCode 1
