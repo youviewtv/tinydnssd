@@ -1,4 +1,4 @@
-package com.example.slilly.tinydnssd;
+package com.youview.tinydnssd;
 
 import android.app.Application;
 import android.test.ApplicationTestCase;
