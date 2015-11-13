@@ -146,6 +146,12 @@ public class DiscoverResolverTest extends ApplicationTestCase<Application> {
         verify(mDiscoverResolver).stopServiceDiscovery(any(NsdManager.DiscoveryListener.class));
     }
 
+    // 'Debounce' tests check that start()/stop() can be safely called on the DiscoverResolver
+    // without regard to the finer grained state in NsdManager, which will throw an exception if you
+    // call stopServiceDiscovery() in the time between discoverServices() and onDiscoveryStarted().
+    // Since this is asynchronous internally, NsdManager may even need to be restarted as soon as
+    // it stops to respect the simplified state.
+
     public void testDebounceStartStop() {
         runOnMainThread(DISCOVER_START);
         verify(mDiscoverResolver).discoverServices(eq(SERVICE_TYPE), eq(NsdManager.PROTOCOL_DNS_SD), any(NsdManager.DiscoveryListener.class));

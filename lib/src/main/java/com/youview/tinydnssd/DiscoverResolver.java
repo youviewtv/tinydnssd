@@ -54,9 +54,10 @@ public class DiscoverResolver {
     private final Map<String, NsdServiceInfo> mResolveQueue = new LinkedHashMap<>();
 
     public DiscoverResolver(Context context, String serviceType, Listener listener) {
-        if (context == null || serviceType == null || listener == null) {
-            throw new NullPointerException();
-        }
+        if     (context == null) throw new NullPointerException("context was null");
+        if (serviceType == null) throw new NullPointerException("serviceType was null");
+        if    (listener == null) throw new NullPointerException("listener was null");
+
         mContext = context;
         mServiceType = serviceType;
         mListener = listener;

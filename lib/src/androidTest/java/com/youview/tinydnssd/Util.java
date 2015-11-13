@@ -33,9 +33,9 @@ class Util {
      * spied object throughout its reference graph. This is useful where the original object uses a
      * cycle of references, such as an inner class pointing back the the parent, which could
      * otherwise lead back to the original object instead of the spied object.
-     * @param original
-     * @param <T>
-     * @return
+     * @param original object to spy
+     * @param <T> type of original and spied object
+     * @return spied object, with all references to original object replaced with spied object
      */
     static <T> T powerSpy(T original) {
         T result = Mockito.spy(original);
