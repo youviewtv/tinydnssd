@@ -138,11 +138,11 @@ public class DiscoverResolverTest extends ApplicationTestCase<Application> {
     }
 
      public void testStartStop() {
-        runOnMainThread(DISCOVER_START);
+        startDiscoveryOnMainThread();
         verify(mDiscoverResolver).discoverServices(eq(SERVICE_TYPE), eq(NsdManager.PROTOCOL_DNS_SD), any(NsdManager.DiscoveryListener.class));
         mDiscoveryListener.onDiscoveryStarted(SERVICE_TYPE);
         verify(mDiscoverResolver, never()).stopServiceDiscovery(any(NsdManager.DiscoveryListener.class));
-        runOnMainThread(DISCOVER_STOP);
+        stopDiscoveryOnMainThread();
         verify(mDiscoverResolver).stopServiceDiscovery(any(NsdManager.DiscoveryListener.class));
     }
 
@@ -153,53 +153,53 @@ public class DiscoverResolverTest extends ApplicationTestCase<Application> {
     // it stops to respect the simplified state.
 
     public void testDebounceStartStop() {
-        runOnMainThread(DISCOVER_START);
+        startDiscoveryOnMainThread();
         verify(mDiscoverResolver).discoverServices(eq(SERVICE_TYPE), eq(NsdManager.PROTOCOL_DNS_SD), any(NsdManager.DiscoveryListener.class));
-        runOnMainThread(DISCOVER_STOP);
+        stopDiscoveryOnMainThread();
         verify(mDiscoverResolver, never()).stopServiceDiscovery(any(NsdManager.DiscoveryListener.class));
         mDiscoveryListener.onDiscoveryStarted(SERVICE_TYPE);
         verify(mDiscoverResolver).stopServiceDiscovery(any(NsdManager.DiscoveryListener.class));
     }
 
     public void testDebounceStartStopStart() {
-        runOnMainThread(DISCOVER_START);
+        startDiscoveryOnMainThread();
         verify(mDiscoverResolver).discoverServices(eq(SERVICE_TYPE), eq(NsdManager.PROTOCOL_DNS_SD), any(NsdManager.DiscoveryListener.class));
-        runOnMainThread(DISCOVER_STOP);
-        runOnMainThread(DISCOVER_START);
+        stopDiscoveryOnMainThread();
+        startDiscoveryOnMainThread();
         mDiscoveryListener.onDiscoveryStarted(SERVICE_TYPE);
         verify(mDiscoverResolver, times(1)).discoverServices(anyString(), anyInt(), any(NsdManager.DiscoveryListener.class));
         verify(mDiscoverResolver, never()).stopServiceDiscovery(any(NsdManager.DiscoveryListener.class));
     }
 
     public void testDebounceStartStopStartStop() {
-        runOnMainThread(DISCOVER_START);
+        startDiscoveryOnMainThread();
         verify(mDiscoverResolver).discoverServices(eq(SERVICE_TYPE), eq(NsdManager.PROTOCOL_DNS_SD), any(NsdManager.DiscoveryListener.class));
-        runOnMainThread(DISCOVER_STOP);
-        runOnMainThread(DISCOVER_START);
-        runOnMainThread(DISCOVER_STOP);
+        stopDiscoveryOnMainThread();
+        startDiscoveryOnMainThread();
+        stopDiscoveryOnMainThread();
         verify(mDiscoverResolver, never()).stopServiceDiscovery(any(NsdManager.DiscoveryListener.class));
         mDiscoveryListener.onDiscoveryStarted(SERVICE_TYPE);
         verify(mDiscoverResolver).stopServiceDiscovery(any(NsdManager.DiscoveryListener.class));
     }
 
     public void testStartAgainWhileNsdIsStopping() {
-        runOnMainThread(DISCOVER_START);
+        startDiscoveryOnMainThread();
         verify(mDiscoverResolver).discoverServices(eq(SERVICE_TYPE), eq(NsdManager.PROTOCOL_DNS_SD), any(NsdManager.DiscoveryListener.class));
         mDiscoveryListener.onDiscoveryStarted(SERVICE_TYPE);
-        runOnMainThread(DISCOVER_STOP);
+        stopDiscoveryOnMainThread();
         verify(mDiscoverResolver).stopServiceDiscovery(eq(mDiscoveryListener));
         // we call start() again before onDiscoveryStopped() => must restart discovery automatically
-        runOnMainThread(DISCOVER_START);
+        startDiscoveryOnMainThread();
         verify(mDiscoverResolver, times(1)).discoverServices(eq(SERVICE_TYPE), eq(NsdManager.PROTOCOL_DNS_SD), any(NsdManager.DiscoveryListener.class));
         mDiscoveryListener.onDiscoveryStopped(SERVICE_TYPE);
         verify(mDiscoverResolver, times(2)).discoverServices(eq(SERVICE_TYPE), eq(NsdManager.PROTOCOL_DNS_SD), any(NsdManager.DiscoveryListener.class));
         mDiscoveryListener.onDiscoveryStarted(SERVICE_TYPE);
-        runOnMainThread(DISCOVER_STOP);
+        stopDiscoveryOnMainThread();
         verify(mDiscoverResolver, times(2)).stopServiceDiscovery(eq(mDiscoveryListener));
     }
 
     public void testResolve() throws IOException, InterruptedException {
-        runOnMainThread(DISCOVER_START);
+        startDiscoveryOnMainThread();
         mDiscoveryListener.onDiscoveryStarted(SERVICE_TYPE);
         NsdServiceInfo serviceInfo = newNsdServiceInfo("device-1234", "_example._tcp.");
         MDNSDiscover.Result result = new MDNSDiscover.Result();
@@ -211,11 +211,11 @@ public class DiscoverResolverTest extends ApplicationTestCase<Application> {
         Map<String, MDNSDiscover.Result> expectedMap = new HashMap<>();
         expectedMap.put("device-1234._example._tcp.local", result);
         verify(mMockListener).onServicesChanged(eq(expectedMap));
-        runOnMainThread(DISCOVER_STOP);
+        stopDiscoveryOnMainThread();
     }
 
     public void testServiceLost() throws IOException, InterruptedException {
-        runOnMainThread(DISCOVER_START);
+        startDiscoveryOnMainThread();
         mDiscoveryListener.onDiscoveryStarted(SERVICE_TYPE);
         NsdServiceInfo serviceInfo = newNsdServiceInfo("device-1234", "_example._tcp.");
         MDNSDiscover.Result result = new MDNSDiscover.Result();
@@ -231,11 +231,11 @@ public class DiscoverResolverTest extends ApplicationTestCase<Application> {
         mLatch.await();
         expectedMap.clear();
         verify(mMockListener).onServicesChanged(eq(expectedMap));
-        runOnMainThread(DISCOVER_STOP);
+        stopDiscoveryOnMainThread();
     }
 
     public void testServiceFoundFailedResolve() throws IOException, InterruptedException {
-        runOnMainThread(DISCOVER_START);
+        startDiscoveryOnMainThread();
         mDiscoveryListener.onDiscoveryStarted(SERVICE_TYPE);
         NsdServiceInfo serviceInfo = newNsdServiceInfo("device-1234", "_example._tcp.");
         when(mMockResolver.resolve(eq("device-1234._example._tcp.local"), anyInt())).thenThrow(new IOException());
@@ -243,14 +243,14 @@ public class DiscoverResolverTest extends ApplicationTestCase<Application> {
         Thread.sleep(100);
         verify(mMockResolver).resolve(eq("device-1234._example._tcp.local"), anyInt());
         verify(mMockListener, never()).onServicesChanged(anyMap());
-        runOnMainThread(DISCOVER_STOP);
+        stopDiscoveryOnMainThread();
     }
 
     public void testNoCallbackAfterStop() throws IOException, InterruptedException {
-        runOnMainThread(DISCOVER_START);
+        startDiscoveryOnMainThread();
         mDiscoveryListener.onDiscoveryStarted(SERVICE_TYPE);
         NsdServiceInfo serviceInfo = newNsdServiceInfo("device-1234", "_example._tcp.");
-        runOnMainThread(DISCOVER_STOP);
+        stopDiscoveryOnMainThread();
         mDiscoveryListener.onServiceFound(serviceInfo);
         mDiscoveryListener.onDiscoveryStopped(SERVICE_TYPE);
         Thread.sleep(100);
@@ -270,6 +270,14 @@ public class DiscoverResolverTest extends ApplicationTestCase<Application> {
             mDiscoverResolver.stop();
         }
     };
+
+    private void startDiscoveryOnMainThread() {
+        runOnMainThread(DISCOVER_START);
+    }
+
+    private void stopDiscoveryOnMainThread() {
+        runOnMainThread(DISCOVER_STOP);
+    }
 
     /**
      * Runs the {@code action} on the main thread, and blocks this thread until the action has
