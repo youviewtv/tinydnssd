@@ -43,21 +43,22 @@ public class DiscoverResolver {
         void onServicesChanged(Map<String, MDNSDiscover.Result> services);
     }
 
-    private final NsdManager mNsdManager;
+    private final Context mContext;
     private final String mServiceType;
     private HashMap<String, MDNSDiscover.Result> mServices = new HashMap<>();
     private final Handler mHandler = new Handler(Looper.getMainLooper());
     private final Listener mListener;
     private boolean mStarted;
-    private boolean mDiscovering;
+    private boolean mTransitioning;
     private ResolveTask mResolveTask;
     private final Map<String, NsdServiceInfo> mResolveQueue = new LinkedHashMap<>();
 
     public DiscoverResolver(Context context, String serviceType, Listener listener) {
-        if (serviceType == null || listener == null) {
-            throw new NullPointerException();
-        }
-        mNsdManager = (NsdManager) context.getSystemService(Context.NSD_SERVICE);
+        if     (context == null) throw new NullPointerException("context was null");
+        if (serviceType == null) throw new NullPointerException("serviceType was null");
+        if    (listener == null) throw new NullPointerException("listener was null");
+
+        mContext = context;
         mServiceType = serviceType;
         mListener = listener;
     }
@@ -66,7 +67,10 @@ public class DiscoverResolver {
         if (mStarted) {
             throw new IllegalStateException();
         }
-        mNsdManager.discoverServices(mServiceType, NsdManager.PROTOCOL_DNS_SD, mDiscoveryListener);
+        if (!mTransitioning) {
+            discoverServices(mServiceType, NsdManager.PROTOCOL_DNS_SD, mDiscoveryListener);
+            mTransitioning = true;
+        }
         mStarted = true;
     }
 
@@ -74,8 +78,9 @@ public class DiscoverResolver {
         if (!mStarted) {
             throw new IllegalStateException();
         }
-        if (mDiscovering) {
-            mNsdManager.stopServiceDiscovery(mDiscoveryListener);
+        if (!mTransitioning) {
+            stopServiceDiscovery(mDiscoveryListener);
+            mTransitioning = true;
         }
         synchronized (mResolveQueue) {
             mResolveQueue.clear();
@@ -98,10 +103,10 @@ public class DiscoverResolver {
         public void onDiscoveryStarted(String serviceType) {
             Log.d(TAG, "onDiscoveryStarted() serviceType = [" + serviceType + "]");
             synchronized (DiscoverResolver.this) {
-                if (mStarted) {
-                    mDiscovering = true;
+                if (!mStarted) {
+                    stopServiceDiscovery(this);
                 } else {
-                    mNsdManager.stopServiceDiscovery(this);
+                    mTransitioning = false;
                 }
             }
         }
@@ -109,6 +114,11 @@ public class DiscoverResolver {
         @Override
         public void onDiscoveryStopped(String serviceType) {
             Log.d(TAG, "onDiscoveryStopped() serviceType = [" + serviceType + "]");
+            if (mStarted) {
+                discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, this);
+            } else {
+                mTransitioning = false;
+            }
         }
 
         @Override
@@ -141,8 +151,8 @@ public class DiscoverResolver {
         }
     };
 
-    private void addService(MDNSDiscover.Result result) {
-        mServices.put(result.srv.fqdn, result);
+    private void addService(String serviceName, MDNSDiscover.Result result) {
+        mServices.put(serviceName, result);
         dispatchServicesChanged();
     }
 
@@ -157,7 +167,7 @@ public class DiscoverResolver {
         mListener.onServicesChanged(services);
     }
 
-    private class ResolveTask extends AsyncTask<Void, MDNSDiscover.Result, Void> {
+    private class ResolveTask extends AsyncTask<Void, Object, Void> {
         @Override
         protected Void doInBackground(Void... params) {
             while (!isCancelled()) {
@@ -171,8 +181,8 @@ public class DiscoverResolver {
                     it.remove();
                 }
                 try {
-                    MDNSDiscover.Result result = MDNSDiscover.resolve(serviceName, RESOLVE_TIMEOUT);
-                    publishProgress(result);
+                    MDNSDiscover.Result result = resolve(serviceName, RESOLVE_TIMEOUT);
+                    publishProgress(serviceName, result);
                 } catch(IOException e) {
                     e.printStackTrace();
                 }
@@ -187,8 +197,8 @@ public class DiscoverResolver {
         }
 
         @Override
-        protected void onProgressUpdate(MDNSDiscover.Result... values) {
-            addService(values[0]);
+        protected void onProgressUpdate(Object... values) {
+            addService((String) values[0], (MDNSDiscover.Result) values[1]);
         }
     }
 
@@ -201,5 +211,23 @@ public class DiscoverResolver {
                 }
             }
         }
+    }
+
+    // default implementation is to delegate to NsdManager
+    // tests can stub this to mock the NsdManager
+    protected void discoverServices(String serviceType, int protocol, NsdManager.DiscoveryListener listener) {
+        ((NsdManager) mContext.getSystemService(Context.NSD_SERVICE)).discoverServices(serviceType, protocol, listener);
+    }
+
+    // default implementation is to delegate to NsdManager
+    // tests can stub this to mock the NsdManager
+    protected void stopServiceDiscovery(NsdManager.DiscoveryListener listener) {
+        ((NsdManager) mContext.getSystemService(Context.NSD_SERVICE)).stopServiceDiscovery(listener);
+    }
+
+    // default implementation is to delegate to MDNSDiscover
+    // tests can stub this to mock it
+    protected MDNSDiscover.Result resolve(String serviceName, int resolveTimeout) throws IOException {
+        return MDNSDiscover.resolve(serviceName, resolveTimeout);
     }
 }
