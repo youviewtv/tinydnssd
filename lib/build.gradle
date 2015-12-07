@@ -46,3 +46,25 @@ dependencies {
     androidTestCompile 'junit:junit:4.12'
     androidTestCompile 'com.google.dexmaker:dexmaker-mockito:1.2'
 }
+
+task sourcesJar(type: Jar) {
+    from android.sourceSets.main.java.srcDirs
+    classifier = 'sources'
+    archiveName "tinydnssd-${VERSION_NAME}-sources.jar"
+}
+
+task javadoc(type: Javadoc) {
+    source = android.sourceSets.main.java.srcDirs
+    classpath += project.files(android.getBootClasspath().join(File.pathSeparator))
+}
+
+task javadocJar(type: Jar, dependsOn: javadoc) {
+    classifier = 'javadoc'
+    from javadoc.destinationDir
+    archiveName "tinydnssd-${VERSION_NAME}-javadoc.jar"
+}
+
+artifacts {
+    archives javadocJar
+    archives sourcesJar
+}
