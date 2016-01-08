@@ -45,7 +45,7 @@ public class DiscoverResolver {
 
     private final Context mContext;
     private final String mServiceType;
-    private HashMap<String, MDNSDiscover.Result> mServices = new HashMap<>();
+    private final HashMap<String, MDNSDiscover.Result> mServices = new HashMap<>();
     private final Handler mHandler = new Handler(Looper.getMainLooper());
     private final Listener mListener;
     private boolean mStarted;
@@ -136,38 +136,57 @@ public class DiscoverResolver {
         @Override
         public void onServiceLost(final NsdServiceInfo serviceInfo) {
             Log.d(TAG, "onServiceLost() serviceInfo = [" + serviceInfo + "]");
-            mHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    if (mStarted) {
-                        String name = serviceInfo.getServiceName() + "." + serviceInfo.getServiceType() + "local";
-                        synchronized (mResolveQueue) {
-                            mResolveQueue.remove(name);
-                        }
-                        removeService(name);
-                    }
+            if (mStarted) {
+                String name = serviceInfo.getServiceName() + "." + serviceInfo.getServiceType() + "local";
+                synchronized (mResolveQueue) {
+                    mResolveQueue.remove(name);
                 }
-            });
+                removeService(name);
+            }
         }
     };
 
-    private void addService(String serviceName, MDNSDiscover.Result result) {
+    private synchronized void addService(String serviceName, MDNSDiscover.Result result) {
         mServices.put(serviceName, result);
         dispatchServicesChanged();
     }
 
-    private void removeService(String name) {
+    private synchronized void removeService(String name) {
         if (mServices.remove(name) != null) {
             dispatchServicesChanged();
         }
     }
 
+    private boolean mServicesChanged;
+
     private void dispatchServicesChanged() {
-        final HashMap<String, MDNSDiscover.Result> services = (HashMap) mServices.clone();
-        mListener.onServicesChanged(services);
+        // Multiple calls to this method are possible before mServicesChangedRunnable executes.
+        // We don't post the runnable every time this method is called, instead we set a flag and
+        // post only if the flag was previously unset. The runnable clears the flag.
+        // In this way, the main thread can coalesce several updates into a single call to
+        // onServicesChanged().
+        if (mStarted && !mServicesChanged) {
+            mServicesChanged = true;
+            mHandler.post(mServicesChangedRunnable);
+        }
     }
 
-    private class ResolveTask extends AsyncTask<Void, Object, Void> {
+    private Runnable mServicesChangedRunnable = new Runnable() {
+        @Override
+        public void run() {
+            synchronized (DiscoverResolver.this) {
+                if (mServicesChanged) {
+                    mServicesChanged = false;
+                    if (mStarted) {
+                        Map<String, MDNSDiscover.Result> services = (HashMap) mServices.clone();
+                        mListener.onServicesChanged(services);
+                    }
+                }
+            }
+        }
+    };
+
+    private class ResolveTask extends AsyncTask<Void, Void, Void> {
         @Override
         protected Void doInBackground(Void... params) {
             while (!isCancelled()) {
@@ -182,7 +201,7 @@ public class DiscoverResolver {
                 }
                 try {
                     MDNSDiscover.Result result = resolve(serviceName, RESOLVE_TIMEOUT);
-                    publishProgress(serviceName, result);
+                    addService(serviceName, result);
                 } catch(IOException e) {
                     e.printStackTrace();
                 }
@@ -194,11 +213,6 @@ public class DiscoverResolver {
         protected void onPostExecute(Void aVoid) {
             mResolveTask = null;
             startResolveTaskIfNeeded();
-        }
-
-        @Override
-        protected void onProgressUpdate(Object... values) {
-            addService((String) values[0], (MDNSDiscover.Result) values[1]);
         }
     }
 
