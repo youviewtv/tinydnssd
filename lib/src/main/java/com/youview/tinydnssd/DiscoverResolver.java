@@ -34,6 +34,22 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * <p>Uses Android's {@link NsdManager} to perform mDNS Service Discovery. Additionally makes use of
+ * {@link MDNSDiscover} to query the TXT record of discovered services (something which is missing
+ * from {@link NsdManager} due to a <a href="https://code.google.com/p/android/issues/detail?id=136099">bug</a>)</p>
+ *
+ * <p>This class presents a simplified client API compared with accessing {@link NsdManager}
+ * directly.</p>
+ *
+ * <p>Another feature is <em>service visibility debouncing</em>: sometimes
+ * {@link android.net.nsd.NsdManager.DiscoveryListener#onServiceLost(NsdServiceInfo)} occurs
+ * then shortly afterwards the same service is reported again in
+ * {@link android.net.nsd.NsdManager.DiscoveryListener#onServiceFound(NsdServiceInfo)}. Use the
+ * {@code debounceMillis} value in the constructor to configure a tolerance to this - removed
+ * services are not notified to the listener until this time elapses without the service
+ * reappearing.</p>
+ */
 public class DiscoverResolver {
 
     private static final String TAG = DiscoverResolver.class.getSimpleName();
@@ -42,6 +58,8 @@ public class DiscoverResolver {
     public interface Listener {
         void onServicesChanged(Map<String, MDNSDiscover.Result> services);
     }
+
+    private final MapDebouncer<String, Object> mDebouncer;
 
     private final Context mContext;
     private final String mServiceType;
@@ -53,7 +71,22 @@ public class DiscoverResolver {
     private ResolveTask mResolveTask;
     private final Map<String, NsdServiceInfo> mResolveQueue = new LinkedHashMap<>();
 
+    /**
+     * Equivalent to {@link #DiscoverResolver(Context, String, Listener, int)} with a
+     * {@code debounceMillis} of 0.
+     */
     public DiscoverResolver(Context context, String serviceType, Listener listener) {
+        this(context, serviceType, listener, 0);
+    }
+
+    /**
+     * @param context the Context to run in
+     * @param serviceType mDNS service type such as {@code "_example._tcp"}
+     * @param listener to receive updates to visible services
+     * @param debounceMillis time to delay service signalling of services that may quickly disappear
+     *                       then reappear. See {@link DiscoverResolver} for details.
+     */
+    public DiscoverResolver(Context context, String serviceType, Listener listener, int debounceMillis) {
         if     (context == null) throw new NullPointerException("context was null");
         if (serviceType == null) throw new NullPointerException("serviceType was null");
         if    (listener == null) throw new NullPointerException("listener was null");
@@ -61,6 +94,31 @@ public class DiscoverResolver {
         mContext = context;
         mServiceType = serviceType;
         mListener = listener;
+
+        mDebouncer = new MapDebouncer<>(debounceMillis, new MapDebouncer.Listener<String, Object>() {
+            @Override
+            public void put(String name, Object o) {
+                if (o != null) {
+                    Log.d(TAG, "add: " + name);
+                    synchronized (mResolveQueue) {
+                        mResolveQueue.put(name, null);
+                    }
+                    startResolveTaskIfNeeded();
+                } else {
+                    Log.d(TAG, "remove: " + name);
+                    synchronized (DiscoverResolver.this) {
+                        synchronized (mResolveQueue) {
+                            mResolveQueue.remove(name);
+                        }
+                        if (mStarted) {
+                            if (mServices.remove(name) != null) {
+                                dispatchServicesChanged();
+                            }
+                        }
+                    }
+                }
+            }
+        });
     }
 
     public synchronized void start() {
@@ -85,6 +143,7 @@ public class DiscoverResolver {
         synchronized (mResolveQueue) {
             mResolveQueue.clear();
         }
+        mDebouncer.clear();
         mServices.clear();
         mServicesChanged = false;
         mStarted = false;
@@ -126,12 +185,11 @@ public class DiscoverResolver {
         @Override
         public void onServiceFound(final NsdServiceInfo serviceInfo) {
             Log.d(TAG, "onServiceFound() serviceInfo = [" + serviceInfo + "]");
-            if (mStarted) {
-                String name = serviceInfo.getServiceName() + "." + serviceInfo.getServiceType() + "local";
-                synchronized (mResolveQueue) {
-                    mResolveQueue.put(name, null);
+            synchronized (DiscoverResolver.this) {
+                if (mStarted) {
+                    String name = serviceInfo.getServiceName() + "." + serviceInfo.getServiceType() + "local";
+                    mDebouncer.put(name, DUMMY);
                 }
-                startResolveTaskIfNeeded();
             }
         }
 
@@ -141,16 +199,16 @@ public class DiscoverResolver {
             synchronized (DiscoverResolver.this) {
                 if (mStarted) {
                     String name = serviceInfo.getServiceName() + "." + serviceInfo.getServiceType() + "local";
-                    synchronized (mResolveQueue) {
-                        mResolveQueue.remove(name);
-                    }
-                    if (mServices.remove(name) != null) {
-                        dispatchServicesChanged();
-                    }
+                    mDebouncer.put(name, null);
                 }
             }
         }
     };
+
+    /**
+     * A non-null value that indicates membership in the MapDebouncer, null indicates non-membership
+     */
+    private Object DUMMY = new Object();
 
     private boolean mServicesChanged;
 

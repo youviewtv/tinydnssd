@@ -13,6 +13,11 @@ leverage the system's already running discovery service, but will send another u
 in order to retrieve the TXT record. It also simplifies the API usage compared to calling `NsdManager`
 directly.
 
+Another feature is _service visibility debouncing_: sometimes [NsdManager] will signal
+`onServiceLost()` then shortly afterwards report the same service in `onServiceFound()`. With this
+library a tolerance to this can be configured - removed services are not notified to the client
+until some time elapses without the service reappearing.
+
 Usage
 -----
 
