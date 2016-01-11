@@ -45,7 +45,7 @@ public class DiscoverResolver {
 
     private final Context mContext;
     private final String mServiceType;
-    private HashMap<String, MDNSDiscover.Result> mServices = new HashMap<>();
+    private final HashMap<String, MDNSDiscover.Result> mServices = new HashMap<>();
     private final Handler mHandler = new Handler(Looper.getMainLooper());
     private final Listener mListener;
     private boolean mStarted;
@@ -85,6 +85,8 @@ public class DiscoverResolver {
         synchronized (mResolveQueue) {
             mResolveQueue.clear();
         }
+        mServices.clear();
+        mServicesChanged = false;
         mStarted = false;
     }
 
@@ -136,38 +138,51 @@ public class DiscoverResolver {
         @Override
         public void onServiceLost(final NsdServiceInfo serviceInfo) {
             Log.d(TAG, "onServiceLost() serviceInfo = [" + serviceInfo + "]");
-            mHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    if (mStarted) {
-                        String name = serviceInfo.getServiceName() + "." + serviceInfo.getServiceType() + "local";
-                        synchronized (mResolveQueue) {
-                            mResolveQueue.remove(name);
-                        }
-                        removeService(name);
+            synchronized (DiscoverResolver.this) {
+                if (mStarted) {
+                    String name = serviceInfo.getServiceName() + "." + serviceInfo.getServiceType() + "local";
+                    synchronized (mResolveQueue) {
+                        mResolveQueue.remove(name);
+                    }
+                    if (mServices.remove(name) != null) {
+                        dispatchServicesChanged();
                     }
                 }
-            });
+            }
         }
     };
 
-    private void addService(String serviceName, MDNSDiscover.Result result) {
-        mServices.put(serviceName, result);
-        dispatchServicesChanged();
-    }
+    private boolean mServicesChanged;
 
-    private void removeService(String name) {
-        if (mServices.remove(name) != null) {
-            dispatchServicesChanged();
+    private void dispatchServicesChanged() {
+        if (!mStarted) {
+            throw new IllegalStateException();
+        }
+        // Multiple calls to this method are possible before mServicesChangedRunnable executes.
+        // We don't post the runnable every time this method is called, instead we set a flag and
+        // post only if the flag was previously unset. The runnable clears the flag.
+        // In this way, the main thread can coalesce several updates into a single call to
+        // onServicesChanged().
+        if (!mServicesChanged) {
+            mServicesChanged = true;
+            mHandler.post(mServicesChangedRunnable);
         }
     }
 
-    private void dispatchServicesChanged() {
-        final HashMap<String, MDNSDiscover.Result> services = (HashMap) mServices.clone();
-        mListener.onServicesChanged(services);
-    }
+    private Runnable mServicesChangedRunnable = new Runnable() {
+        @Override
+        public void run() {
+            synchronized (DiscoverResolver.this) {
+                if (mStarted && mServicesChanged) {
+                    Map<String, MDNSDiscover.Result> services = (HashMap) mServices.clone();
+                    mListener.onServicesChanged(services);
+                }
+                mServicesChanged = false;
+            }
+        }
+    };
 
-    private class ResolveTask extends AsyncTask<Void, Object, Void> {
+    private class ResolveTask extends AsyncTask<Void, Void, Void> {
         @Override
         protected Void doInBackground(Void... params) {
             while (!isCancelled()) {
@@ -182,7 +197,12 @@ public class DiscoverResolver {
                 }
                 try {
                     MDNSDiscover.Result result = resolve(serviceName, RESOLVE_TIMEOUT);
-                    publishProgress(serviceName, result);
+                    synchronized (DiscoverResolver.this) {
+                        if (mStarted) {
+                            mServices.put(serviceName, result);
+                            dispatchServicesChanged();
+                        }
+                    }
                 } catch(IOException e) {
                     e.printStackTrace();
                 }
@@ -194,11 +214,6 @@ public class DiscoverResolver {
         protected void onPostExecute(Void aVoid) {
             mResolveTask = null;
             startResolveTaskIfNeeded();
-        }
-
-        @Override
-        protected void onProgressUpdate(Object... values) {
-            addService((String) values[0], (MDNSDiscover.Result) values[1]);
         }
     }
 

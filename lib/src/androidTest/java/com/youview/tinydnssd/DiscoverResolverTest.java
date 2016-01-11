@@ -27,6 +27,7 @@ import android.net.nsd.NsdServiceInfo;
 import android.os.Handler;
 import android.os.Looper;
 import android.test.ApplicationTestCase;
+import android.util.Log;
 
 import org.junit.runner.RunWith;
 import org.junit.runner.Runner;
@@ -34,6 +35,7 @@ import org.mockito.invocation.InvocationOnMock;
 import org.mockito.stubbing.Answer;
 
 import java.io.IOException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -42,6 +44,8 @@ import static org.mockito.Mockito.*;
 
 @RunWith(Runner.class)
 public class DiscoverResolverTest extends ApplicationTestCase<Application> {
+
+    private static final String TAG = DiscoverResolverTest.class.getSimpleName();
 
     private static final String SERVICE_TYPE = "_example._tcp._local";
 
@@ -255,6 +259,182 @@ public class DiscoverResolverTest extends ApplicationTestCase<Application> {
         mDiscoveryListener.onDiscoveryStopped(SERVICE_TYPE);
         Thread.sleep(100);
         verify(mMockListener, never()).onServicesChanged(anyMap());
+    }
+
+    @Override
+    protected void tearDown() throws Exception {
+        Log.d(TAG, "tearDown()");
+        // call unblockMainThread() before super.tearDown(), since super.tearDown() scrubs the class
+        // members which will wipe the signalling mechanism for unblockMainThread().
+        unblockMainThread();
+        super.tearDown();
+    }
+
+    /**
+     * Input two services while the main thread is busy. When the main thread becomes free, it
+     * should receive only one onServicesChanged() with the two services.
+     */
+    public void testCoalesceServiceFound() throws IOException, InterruptedException {
+        MDNSDiscover.Result result1 = new MDNSDiscover.Result();
+        when(mMockResolver.resolve(eq("device-1234._example._tcp.local"), anyInt())).thenReturn(result1);
+        MDNSDiscover.Result result2 = new MDNSDiscover.Result();
+        when(mMockResolver.resolve(eq("device-5678._example._tcp.local"), anyInt())).thenReturn(result2);
+
+        startDiscoveryOnMainThread();
+        mDiscoveryListener.onDiscoveryStarted(SERVICE_TYPE);
+        NsdServiceInfo serviceInfo1 = newNsdServiceInfo("device-1234", "_example._tcp.");
+        NsdServiceInfo serviceInfo2 = newNsdServiceInfo("device-5678", "_example._tcp.");
+        blockMainThread();
+        mDiscoveryListener.onServiceFound(serviceInfo1);
+        mDiscoveryListener.onServiceFound(serviceInfo2);
+        Thread.sleep(100);
+        verify(mMockResolver).resolve(eq("device-1234._example._tcp.local"), anyInt());
+        verify(mMockResolver).resolve(eq("device-5678._example._tcp.local"), anyInt());
+        verify(mMockListener, never()).onServicesChanged(anyMap());
+        mLatch = new CountDownLatch(1);
+        unblockMainThread();
+        mLatch.await();
+
+        Map<String, MDNSDiscover.Result> expectedServices = new HashMap<>();
+        expectedServices.put("device-1234._example._tcp.local", result1);
+        expectedServices.put("device-5678._example._tcp.local", result2);
+        verify(mMockListener, times(1)).onServicesChanged(anyMap());
+        verify(mMockListener, times(1)).onServicesChanged(eq(expectedServices));
+        Thread.sleep(100);
+        verify(mMockListener, times(1)).onServicesChanged(anyMap());
+
+        stopDiscoveryOnMainThread();
+    }
+
+    /**
+     * Discover two services, then with the main thread blocked, lose both services. When the main
+     * thread is unblocked, there should be one update indicating both services are lost.
+     * @throws IOException
+     * @throws InterruptedException
+     */
+    public void testCoalesceServiceLost() throws IOException, InterruptedException {
+        MDNSDiscover.Result result1 = new MDNSDiscover.Result();
+        when(mMockResolver.resolve(eq("device-1234._example._tcp.local"), anyInt())).thenReturn(result1);
+        MDNSDiscover.Result result2 = new MDNSDiscover.Result();
+        when(mMockResolver.resolve(eq("device-5678._example._tcp.local"), anyInt())).thenReturn(result2);
+
+        Map<String, MDNSDiscover.Result> populatedMap = new HashMap<>();
+        populatedMap.put("device-1234._example._tcp.local", result1);
+        populatedMap.put("device-5678._example._tcp.local", result2);
+
+        startDiscoveryOnMainThread();
+        mDiscoveryListener.onDiscoveryStarted(SERVICE_TYPE);
+        NsdServiceInfo serviceInfo1 = newNsdServiceInfo("device-1234", "_example._tcp.");
+        NsdServiceInfo serviceInfo2 = newNsdServiceInfo("device-5678", "_example._tcp.");
+        blockMainThread();
+        mDiscoveryListener.onServiceFound(serviceInfo1);
+        mDiscoveryListener.onServiceFound(serviceInfo2);
+        Thread.sleep(100);  // give the resolver some time
+        verify(mMockResolver).resolve(eq("device-1234._example._tcp.local"), anyInt());
+        verify(mMockResolver).resolve(eq("device-5678._example._tcp.local"), anyInt());
+        verify(mMockListener, never()).onServicesChanged(anyMap());
+        mLatch = new CountDownLatch(1);
+        unblockMainThread();
+        mLatch.await();
+        verify(mMockListener).onServicesChanged(anyMap());
+        verify(mMockListener).onServicesChanged(eq(populatedMap));
+
+        blockMainThread();
+        mDiscoveryListener.onServiceLost(serviceInfo1);
+        mDiscoveryListener.onServiceLost(serviceInfo2);
+        Thread.sleep(100);
+        verify(mMockListener).onServicesChanged(anyMap());
+        mLatch = new CountDownLatch(1);
+        unblockMainThread();
+        mLatch.await();
+        Map<String, MDNSDiscover.Result> emptyMap = Collections.emptyMap();
+        verify(mMockListener, times(2)).onServicesChanged(anyMap());
+        verify(mMockListener, times(1)).onServicesChanged(eq(emptyMap));
+
+        Thread.sleep(100);
+        verify(mMockListener, times(2)).onServicesChanged(anyMap());
+
+        stopDiscoveryOnMainThread();
+    }
+
+    /**
+     * Resolve a service but inhibit the callback by having the main thread blocked. Stop the
+     * DiscoverResolver as soon as the main thread is unblocked, then check the callback does not
+     * occur after being stopped.
+     * @throws IOException
+     * @throws InterruptedException
+     */
+    public void testNoChangesAfterStop() throws IOException, InterruptedException {
+        MDNSDiscover.Result result = new MDNSDiscover.Result();
+        when(mMockResolver.resolve(eq("device-1234._example._tcp.local"), anyInt())).thenReturn(result);
+
+        startDiscoveryOnMainThread();
+        mDiscoveryListener.onDiscoveryStarted(SERVICE_TYPE);
+        NsdServiceInfo serviceInfo = newNsdServiceInfo("device-1234", "_example._tcp.");
+        blockMainThread();
+        new Handler(Looper.getMainLooper()).post(DISCOVER_STOP); // queue this to happen straight after unblockMainThread()
+        mDiscoveryListener.onServiceFound(serviceInfo);
+        Thread.sleep(100);  // give the resolver some time
+        verify(mMockResolver).resolve(eq("device-1234._example._tcp.local"), anyInt());
+        verify(mMockListener, never()).onServicesChanged(anyMap());
+        unblockMainThread();
+        Thread.sleep(100);
+        verify(mMockListener, never()).onServicesChanged(anyMap());
+    }
+
+    private boolean mBlockMainThread;
+    private final Object mMainThreadBlockCondVar = new Object();
+
+    /**
+     * Once this method returns, the main thread is guaranteed to be blocked waiting for
+     * {@link #unblockMainThread()} to be called.
+     */
+    private void blockMainThread() {
+        Log.d(TAG, "blockMainThread()");
+
+        final CountDownLatch runLatch = new CountDownLatch(1);
+
+        // post a Runnable to the main thread that will block on the value mBlockMainThread
+        mBlockMainThread = true;
+        new Handler(Looper.getMainLooper()).post(new Runnable() {
+            @Override
+            public void run() {
+                // notify blockMainThread() that this Runnable is now running
+                runLatch.countDown();
+
+                // wait for a call to unblockMainThread()
+                Log.d(TAG, "blocking main thread");
+                synchronized (mMainThreadBlockCondVar) {
+                    while (mBlockMainThread) {
+                        try {
+                            mMainThreadBlockCondVar.wait();
+                        } catch (InterruptedException e) {
+                            throw new Error(e);
+                        }
+                    }
+                }
+                Log.d(TAG, "unblocking main thread");
+            }
+        });
+
+        // wait for the main thread to enter the Runnable we just posted
+        try {
+            runLatch.await();
+        } catch (InterruptedException e) {
+            throw new Error(e);
+        }
+    }
+
+    /**
+     * Resume the main thread having previously blocked it with {@link #blockMainThread()}.
+     */
+    private void unblockMainThread() {
+        Log.d(TAG, "unblockMainThread()");
+
+        synchronized (mMainThreadBlockCondVar) {
+            mBlockMainThread = false;
+            mMainThreadBlockCondVar.notifyAll();
+        }
     }
 
     private final Runnable DISCOVER_START = new Runnable() {
