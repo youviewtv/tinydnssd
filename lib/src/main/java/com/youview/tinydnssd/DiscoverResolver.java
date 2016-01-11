@@ -85,6 +85,8 @@ public class DiscoverResolver {
         synchronized (mResolveQueue) {
             mResolveQueue.clear();
         }
+        mServices.clear();
+        mServicesChanged = false;
         mStarted = false;
     }
 
@@ -136,36 +138,32 @@ public class DiscoverResolver {
         @Override
         public void onServiceLost(final NsdServiceInfo serviceInfo) {
             Log.d(TAG, "onServiceLost() serviceInfo = [" + serviceInfo + "]");
-            if (mStarted) {
-                String name = serviceInfo.getServiceName() + "." + serviceInfo.getServiceType() + "local";
-                synchronized (mResolveQueue) {
-                    mResolveQueue.remove(name);
+            synchronized (DiscoverResolver.this) {
+                if (mStarted) {
+                    String name = serviceInfo.getServiceName() + "." + serviceInfo.getServiceType() + "local";
+                    synchronized (mResolveQueue) {
+                        mResolveQueue.remove(name);
+                    }
+                    if (mServices.remove(name) != null) {
+                        dispatchServicesChanged();
+                    }
                 }
-                removeService(name);
             }
         }
     };
 
-    private synchronized void addService(String serviceName, MDNSDiscover.Result result) {
-        mServices.put(serviceName, result);
-        dispatchServicesChanged();
-    }
-
-    private synchronized void removeService(String name) {
-        if (mServices.remove(name) != null) {
-            dispatchServicesChanged();
-        }
-    }
-
     private boolean mServicesChanged;
 
     private void dispatchServicesChanged() {
+        if (!mStarted) {
+            throw new IllegalStateException();
+        }
         // Multiple calls to this method are possible before mServicesChangedRunnable executes.
         // We don't post the runnable every time this method is called, instead we set a flag and
         // post only if the flag was previously unset. The runnable clears the flag.
         // In this way, the main thread can coalesce several updates into a single call to
         // onServicesChanged().
-        if (mStarted && !mServicesChanged) {
+        if (!mServicesChanged) {
             mServicesChanged = true;
             mHandler.post(mServicesChangedRunnable);
         }
@@ -175,13 +173,11 @@ public class DiscoverResolver {
         @Override
         public void run() {
             synchronized (DiscoverResolver.this) {
-                if (mServicesChanged) {
-                    mServicesChanged = false;
-                    if (mStarted) {
-                        Map<String, MDNSDiscover.Result> services = (HashMap) mServices.clone();
-                        mListener.onServicesChanged(services);
-                    }
+                if (mStarted && mServicesChanged) {
+                    Map<String, MDNSDiscover.Result> services = (HashMap) mServices.clone();
+                    mListener.onServicesChanged(services);
                 }
+                mServicesChanged = false;
             }
         }
     };
@@ -201,7 +197,12 @@ public class DiscoverResolver {
                 }
                 try {
                     MDNSDiscover.Result result = resolve(serviceName, RESOLVE_TIMEOUT);
-                    addService(serviceName, result);
+                    synchronized (DiscoverResolver.this) {
+                        if (mStarted) {
+                            mServices.put(serviceName, result);
+                            dispatchServicesChanged();
+                        }
+                    }
                 } catch(IOException e) {
                     e.printStackTrace();
                 }
