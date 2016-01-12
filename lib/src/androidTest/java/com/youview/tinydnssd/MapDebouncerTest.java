@@ -16,6 +16,8 @@ import static org.mockito.Mockito.verifyNoMoreInteractions;
 public class MapDebouncerTest extends ApplicationTestCase<Application> {
 
     private static final int DEBOUNCE_PERIOD = 1000;
+    private static final int DEBOUNCE_PERIOD_BEFORE = DEBOUNCE_PERIOD / 2;
+    private static final int DEBOUNCE_PERIOD_AFTER = DEBOUNCE_PERIOD + 10;
 
     private MapDebouncer<String, String> mMapDebouncer;
     private MapDebouncer.Listener<String, String> mMockListener;
@@ -53,7 +55,7 @@ public class MapDebouncerTest extends ApplicationTestCase<Application> {
         verify(mMockListener).put(eq("foo"), eq("bar"));
         putFromMainThread("foo", null);
         verify(mMockListener, times(1)).put(eq("foo"), anyString());
-        SystemClock.sleep(DEBOUNCE_PERIOD + 10);
+        SystemClock.sleep(DEBOUNCE_PERIOD_AFTER);
         verify(mMockListener).put(eq("foo"), isNull(String.class));
         verifyNoMoreInteractions(mMockListener);
     }
@@ -63,10 +65,10 @@ public class MapDebouncerTest extends ApplicationTestCase<Application> {
         verify(mMockListener).put(eq("foo"), eq("bar"));
         putFromMainThread("foo", null);
         verify(mMockListener, times(1)).put(eq("foo"), anyString());
-        SystemClock.sleep(DEBOUNCE_PERIOD / 2);
+        SystemClock.sleep(DEBOUNCE_PERIOD_BEFORE);
         verify(mMockListener, times(1)).put(eq("foo"), anyString());
         putFromMainThread("foo", "bar");
-        SystemClock.sleep(DEBOUNCE_PERIOD + 10);
+        SystemClock.sleep(DEBOUNCE_PERIOD_AFTER);
         verifyNoMoreInteractions(mMockListener);
     }
 
@@ -75,11 +77,11 @@ public class MapDebouncerTest extends ApplicationTestCase<Application> {
         verify(mMockListener).put(eq("foo"), eq("bar"));
         putFromMainThread("foo", null);
         verify(mMockListener, times(1)).put(eq("foo"), anyString());
-        SystemClock.sleep(DEBOUNCE_PERIOD / 2);
+        SystemClock.sleep(DEBOUNCE_PERIOD_BEFORE);
         verify(mMockListener, times(1)).put(eq("foo"), anyString());
         putFromMainThread("foo", "baz");
         verify(mMockListener, times(1)).put(eq("foo"), eq("baz"));
-        SystemClock.sleep(DEBOUNCE_PERIOD + 10);
+        SystemClock.sleep(DEBOUNCE_PERIOD_AFTER);
         verifyNoMoreInteractions(mMockListener);
     }
 

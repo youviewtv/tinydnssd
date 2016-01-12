@@ -41,6 +41,7 @@ public class MainActivity extends ActionBarActivity implements DiscoverResolver.
 
     private static final String SERVICE_TYPE = "_yv-bridge._tcp";
     private static final String TAG = MainActivity.class.getSimpleName();
+    private static final int DEBOUNCE_MILLIS = 5000;
 
     private DiscoverResolver mDiscoverResolver;
 
@@ -93,7 +94,7 @@ public class MainActivity extends ActionBarActivity implements DiscoverResolver.
         setContentView(R.layout.activity_main);
         ListView listView = (ListView) findViewById(R.id.list);
         listView.setAdapter(mAdapter);
-        mDiscoverResolver = new DiscoverResolver(this, SERVICE_TYPE, this, 5000);
+        mDiscoverResolver = new DiscoverResolver(this, SERVICE_TYPE, this, DEBOUNCE_MILLIS);
     }
 
     @Override
