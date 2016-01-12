@@ -22,6 +22,7 @@ package com.youview.tinydnssd.demo;
 
 import android.os.Bundle;
 import android.support.v7.app.ActionBarActivity;
+import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.BaseAdapter;
@@ -40,6 +41,7 @@ public class MainActivity extends ActionBarActivity implements DiscoverResolver.
 
     private static final String SERVICE_TYPE = "_yv-bridge._tcp";
     private static final String TAG = MainActivity.class.getSimpleName();
+    private static final int DEBOUNCE_MILLIS = 5000;
 
     private DiscoverResolver mDiscoverResolver;
 
@@ -92,11 +94,12 @@ public class MainActivity extends ActionBarActivity implements DiscoverResolver.
         setContentView(R.layout.activity_main);
         ListView listView = (ListView) findViewById(R.id.list);
         listView.setAdapter(mAdapter);
-        mDiscoverResolver = new DiscoverResolver(this, SERVICE_TYPE, this);
+        mDiscoverResolver = new DiscoverResolver(this, SERVICE_TYPE, this, DEBOUNCE_MILLIS);
     }
 
     @Override
     public void onServicesChanged(Map<String, MDNSDiscover.Result> services) {
+        Log.d(TAG, "onServicesChanged() size=" + services.size());
         mServiceList = new ArrayList<>();
         for (MDNSDiscover.Result service : services.values()) {
             mServiceList.add(service.srv.fqdn + " " + service.txt.dict);
