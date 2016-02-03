@@ -232,7 +232,8 @@ public class DiscoverResolver {
         public void run() {
             synchronized (DiscoverResolver.this) {
                 if (mStarted && mServicesChanged) {
-                    Map<String, MDNSDiscover.Result> services = (HashMap) mServices.clone();
+                    @SuppressWarnings("unchecked")
+                    Map<String, MDNSDiscover.Result> services = (Map) mServices.clone();
                     mListener.onServicesChanged(services);
                 }
                 mServicesChanged = false;
