@@ -12,8 +12,8 @@
         android:theme="@style/AppTheme">
 
         <activity
-            android:name=".MainActivity"
-            android:label="@string/nsd_plus_tinyresolve" >
+            android:name=".DiscoverResolverDemoActivity"
+            android:label="@string/discoverresolver_demo" >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -22,8 +22,8 @@
         </activity>
 
         <activity
-            android:name=".DiscoverActivity"
-            android:label="MDNSDiscover" >
+            android:name=".MDNSDiscoverDemoActivity"
+            android:label="@string/mdnsdiscover_demo" >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

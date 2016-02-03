@@ -23,8 +23,6 @@ package com.youview.tinydnssd.demo;
 import android.os.Bundle;
 import android.support.v7.app.ActionBarActivity;
 import android.util.Log;
-import android.view.View;
-import android.view.ViewGroup;
 import android.widget.BaseAdapter;
 import android.widget.ListView;
 import android.widget.TextView;
@@ -34,45 +32,42 @@ import com.youview.tinydnssd.MDNSDiscover;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
-public class MainActivity extends ActionBarActivity implements DiscoverResolver.Listener {
+public class DiscoverResolverDemoActivity extends ActionBarActivity implements DiscoverResolver.Listener {
 
     private static final String SERVICE_TYPE = "_yv-bridge._tcp";
-    private static final String TAG = MainActivity.class.getSimpleName();
+    private static final String TAG = DiscoverResolverDemoActivity.class.getSimpleName();
     private static final int DEBOUNCE_MILLIS = 5000;
 
     private DiscoverResolver mDiscoverResolver;
 
-    private List<String> mServiceList = new ArrayList<>();
+    private List<MDNSDiscover.Result> mServiceList = new ArrayList<>();
 
-    private BaseAdapter mAdapter = new BaseAdapter() {
+    private BaseAdapter mAdapter = new ResultAdapter() {
         @Override
         public int getCount() {
             return mServiceList.size();
         }
 
         @Override
-        public Object getItem(int position) {
+        public MDNSDiscover.Result getItem(int position) {
             return mServiceList.get(position);
         }
+    };
 
+    private Comparator<? super MDNSDiscover.Result> mFqdnComparator = new Comparator<MDNSDiscover.Result>() {
         @Override
-        public long getItemId(int position) {
-            return position;
-        }
-
-        @Override
-        public View getView(int position, View convertView, ViewGroup parent) {
-            TextView view;
-            if (convertView == null) {
-                view = (TextView) getLayoutInflater().inflate(R.layout.list_item, parent, false);
-            } else {
-                view = (TextView) convertView;
+        public int compare(MDNSDiscover.Result lhs, MDNSDiscover.Result rhs) {
+            if (lhs.a == null) {
+                return rhs.a != null ? -1 : 0;
             }
-            view.setText(mServiceList.get(position));
-            return view;
+            if (rhs.a == null) {
+                return 1;
+            }
+            return lhs.a.fqdn.compareTo(rhs.a.fqdn);
         }
     };
 
@@ -91,20 +86,20 @@ public class MainActivity extends ActionBarActivity implements DiscoverResolver.
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
+        setContentView(R.layout.activity_discoverresolver_demo);
         ListView listView = (ListView) findViewById(R.id.list);
         listView.setAdapter(mAdapter);
         mDiscoverResolver = new DiscoverResolver(this, SERVICE_TYPE, this, DEBOUNCE_MILLIS);
+        ((TextView) findViewById(R.id.text_searching)).setText(
+                getString(R.string.searching_for, SERVICE_TYPE));
     }
 
     @Override
     public void onServicesChanged(Map<String, MDNSDiscover.Result> services) {
         Log.d(TAG, "onServicesChanged() size=" + services.size());
-        mServiceList = new ArrayList<>();
-        for (MDNSDiscover.Result service : services.values()) {
-            mServiceList.add(service.srv.fqdn + " " + service.txt.dict);
-        }
-        Collections.sort(mServiceList);
+        mServiceList.clear();
+        mServiceList.addAll(services.values());
+        Collections.sort(mServiceList, mFqdnComparator);
         mAdapter.notifyDataSetChanged();
     }
 }

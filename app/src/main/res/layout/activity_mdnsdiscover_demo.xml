@@ -14,7 +14,7 @@
         android:text="@string/discover"/>
 
     <TextView
-        android:id="@+id/num_boxes_found"
+        android:id="@+id/num_services_found"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_alignTop="@id/button_discover"
@@ -22,7 +22,7 @@
         android:layout_toLeftOf="@id/button_discover"
         android:layout_marginLeft="@dimen/gap_small"
         android:gravity="center_vertical"
-        tools:text="%d boxes found"/>
+        tools:text="@string/num_services_found"/>
 
     <ListView
         android:id="@+id/list"
