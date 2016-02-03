@@ -39,7 +39,7 @@ import java.util.Map;
 
 public class DiscoverResolverDemoActivity extends ActionBarActivity implements DiscoverResolver.Listener {
 
-    private static final String SERVICE_TYPE = "_yv-bridge._tcp";
+    private static final String SERVICE_TYPE = "_googlecast._tcp";
     private static final String TAG = DiscoverResolverDemoActivity.class.getSimpleName();
     private static final int DEBOUNCE_MILLIS = 5000;
 
