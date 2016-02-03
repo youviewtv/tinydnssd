@@ -154,18 +154,34 @@ public class MDNSDiscover {
         MulticastSocket sock = new MulticastSocket();   // binds to a random free source port
         if (DEBUG) System.out.println("Source port is " + sock.getLocalPort());
         if (DEBUG) System.out.println("Query packet:");
-        byte[] data = queryPacket(serviceName, QCLASS_INTERNET | CLASS_FLAG_UNICAST, QTYPE_TXT, QTYPE_SRV);
+        byte[] data = queryPacket(serviceName, QCLASS_INTERNET | CLASS_FLAG_UNICAST, QTYPE_A, QTYPE_SRV, QTYPE_TXT);
         if (DEBUG) hexdump(data, 0, data.length);
         DatagramPacket packet = new DatagramPacket(data, data.length, group, PORT);
         sock.setTimeToLive(255);
         sock.send(packet);
         byte[] buf = new byte[1024];
         packet = new DatagramPacket(buf, buf.length);
-        sock.setSoTimeout(timeout);
-        sock.receive(packet);
-        if (DEBUG) System.out.println("\n\nIncoming packet:");
-        if (DEBUG) hexdump(packet.getData(), 0, packet.getLength());
-        return decode(packet.getData(), packet.getLength());
+        Result result = new Result();
+        long endTime = 0;
+        if (timeout != 0) {
+            endTime = System.currentTimeMillis() + timeout;
+        }
+        // records could be returned in different packets, so we have to loop
+        // timeout applies to the acquisition of ALL packets
+        while (result.a == null || result.srv == null || result.txt == null) {
+            if (timeout != 0) {
+                int remaining = (int) (endTime - System.currentTimeMillis());
+                if (remaining <= 0) {
+                    break;
+                }
+                sock.setSoTimeout(remaining);
+            }
+            sock.receive(packet);
+            if (DEBUG) System.out.println("\n\nIncoming packet:");
+            if (DEBUG) hexdump(packet.getData(), 0, packet.getLength());
+            decode(packet.getData(), packet.getLength(), result);
+        }
+        return result;
     }
 
     private static void writeFQDN(String name, OutputStream out) throws IOException {
@@ -240,6 +256,12 @@ public class MDNSDiscover {
     }
 
     static Result decode(byte[] packet, int packetLength) throws IOException {
+        Result result = new Result();
+        decode(packet, packetLength, result);
+        return result;
+    }
+
+    static void decode(byte[] packet, int packetLength, Result result) throws IOException {
         DataInputStream dis = new DataInputStream(new ByteArrayInputStream(packet, 0, packetLength));
         short transactionID = dis.readShort();
         short flags = dis.readShort();
@@ -254,7 +276,6 @@ public class MDNSDiscover {
             short qclass = dis.readShort();
         }
         // decode the answers
-        Result result = new Result();
         for (int i = 0; i < answers + authorityRRs + additionalRRs; i++) {
             String fqdn = decodeFQDN(dis, packet, packetLength);
             short type = dis.readShort();
@@ -288,7 +309,6 @@ public class MDNSDiscover {
                 record.ttl = ttl;
             }
         }
-        return result;
     }
 
     private static SRV decodeSRV(byte[] srvData, byte[] packetData, int packetLength) throws IOException {

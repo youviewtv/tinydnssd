@@ -37,7 +37,7 @@ import java.util.HashMap;
 
 public class MDNSDiscoverDemoActivity extends ActionBarActivity {
 
-    private static final String SERVICE_TYPE = "_yv-bridge._tcp.local";
+    private static final String SERVICE_TYPE = "_googlecast._tcp.local";
     private static final int DISCOVER_TIMEOUT = 5000;
 
     private static final String TAG = MDNSDiscoverDemoActivity.class.getSimpleName();
