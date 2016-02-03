@@ -1,8 +1,11 @@
 <resources>
     <string name="app_name">tinydnssd</string>
+    <string name="discoverresolver_demo">DiscoverResolver Demo</string>
+    <string name="mdnsdiscover_demo">MDNSDiscover Demo</string>
 
     <string name="action_settings">Settings</string>
     <string name="discover">Discover</string>
-    <string name="num_boxes_found">%d boxes found</string>
-    <string name="nsd_plus_tinyresolve">Nsd + tinyresolve</string>
+    <string name="num_services_found">%d services found</string>
+    <string name="search_for">Search for %s</string>
+    <string name="searching_for">Searching for %s</string>
 </resources>

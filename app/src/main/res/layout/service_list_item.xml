@@ -7,13 +7,6 @@
     android:padding="@dimen/gap_normal">
 
     <TextView
-        android:id="@+id/text_service_name"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginBottom="@dimen/gap_small"
-        tools:text="Service Name" />
-
-    <TextView
         android:id="@+id/text_dns_name"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -28,9 +21,10 @@
         tools:text="IP+port" />
 
     <TextView
-        android:id="@+id/text_vendor_serial"
+        android:id="@+id/text_txt_record"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        tools:text="Vendor+Serial" />
+        android:layout_marginBottom="@dimen/gap_small"
+        tools:text="TXT record" />
 
 </LinearLayout>
