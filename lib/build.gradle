@@ -1,4 +1,6 @@
 apply plugin: 'com.android.library'
+apply plugin: 'maven'
+apply plugin: 'signing'
 
 android {
     compileSdkVersion 23
@@ -31,6 +33,9 @@ def getVersionName = {
     return "${stdout.toString().trim()}.${BUILD_NUMBER}"
 }
 def VERSION_NAME = getVersionName()
+
+group = 'com.youview'
+version = VERSION_NAME
 
 android.libraryVariants.all { variant ->
     Jar task = project.tasks.create "jar${name.capitalize()}", Jar
@@ -67,4 +72,61 @@ task javadocJar(type: Jar, dependsOn: javadoc) {
 artifacts {
     archives javadocJar
     archives sourcesJar
+}
+
+if (!hasProperty('sonatypeUsername')) {
+    project.ext.sonatypeUsername = null
+}
+
+if (!hasProperty('sonatypePassword')) {
+    project.ext.sonatypePassword = null
+}
+
+signing {
+    required { gradle.taskGraph.hasTask("uploadArchives") }
+    sign configurations.archives
+}
+
+uploadArchives {
+    repositories {
+        mavenDeployer {
+            beforeDeployment { MavenDeployment deployment -> signing.signPom(deployment) }
+
+            repository(url: "https://oss.sonatype.org/service/local/staging/deploy/maven2/") {
+                authentication(userName: sonatypeUsername, password: sonatypePassword)
+            }
+
+            // upload the .jar, not the .aar (or .aar.asc etc)
+            filter { artifact, file -> !file.getName().contains(".aar") }
+
+            pom.project {
+                artifactId "tinydnssd"
+                name 'TinyDNSSD'
+                packaging 'jar'
+                description 'A Multicast DNS Service Discovery library for Android and Java applications'
+                url 'https://github.com/youviewtv/tinydnssd'
+
+                scm {
+                    url 'scm:git@github.com/youviewtv/tinydnssd'
+                    connection 'scm:git@github.com/youviewtv/tinydnssd.git'
+                    developerConnection 'scm:git@github.com/youviewtv/tinydnssd.git'
+                }
+
+                licenses {
+                    license {
+                        name 'The MIT License'
+                        url 'https://opensource.org/licenses/MIT'
+                        distribution 'repo'
+                    }
+                }
+
+                developers {
+                    developer {
+                        name 'Steve Lilly'
+                        email 'steve.lilly@youview.com'
+                    }
+                }
+            }
+        }
+    }
 }
