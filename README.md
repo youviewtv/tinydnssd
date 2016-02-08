@@ -37,6 +37,27 @@ DiscoverResolver resolver = new DiscoverResolver(context, "_androidtvremote._tcp
 resolver.start();
 ```
 
+Download
+--------
+
+Download [the latest JAR] or add Gradle dependency:
+
+```
+dependencies {
+    compile 'com.youview:tinydnssd:1.2.7'
+}
+```
+
+or Maven:
+
+```
+<dependency>
+    <groupId>com.youview</groupId>
+    <artifactId>tinydnssd</artifactId>
+    <version>1.2.7</version>
+</dependency>
+```
+
 License
 -------
 
@@ -62,3 +83,4 @@ License
 
 [bug]: https://code.google.com/p/android/issues/detail?id=136099
 [NsdManager]: http://developer.android.com/reference/android/net/nsd/NsdManager.html
+[the latest JAR]: https://search.maven.org/remote_content?g=com.youview&a=tinydnssd&v=LATEST
