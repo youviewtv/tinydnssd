@@ -103,39 +103,43 @@ public class MDNSDiscover {
     public static void discover(String serviceType, Callback callback, int timeout) throws IOException {
         if (timeout < 0) throw new IllegalArgumentException();
         InetAddress group = InetAddress.getByName(MULTICAST_GROUP_ADDRESS);
-        MulticastSocket sock = new MulticastSocket();   // binds to a random free source port
-        if (DEBUG) System.out.println("Source port is " + sock.getLocalPort());
         byte[] data = discoverPacket(serviceType);
         if (DEBUG) System.out.println("Query packet:");
         if (DEBUG) hexdump(data, 0, data.length);
         DatagramPacket packet = new DatagramPacket(data, data.length, group, PORT);
-        sock.setTimeToLive(255);
-        sock.send(packet);
-        byte[] buf = new byte[1024];
-        packet = new DatagramPacket(buf, buf.length);
-        long endTime = 0;
-        if (timeout != 0) {
-            endTime = System.currentTimeMillis() + timeout;
-        }
-        while (true) {
+        MulticastSocket sock = new MulticastSocket();   // binds to a random free source port
+        try {
+            if (DEBUG) System.out.println("Source port is " + sock.getLocalPort());
+            sock.setTimeToLive(255);
+            sock.send(packet);
+            byte[] buf = new byte[1024];
+            packet = new DatagramPacket(buf, buf.length);
+            long endTime = 0;
             if (timeout != 0) {
-                int remaining = (int) (endTime - System.currentTimeMillis());
-                if (remaining <= 0) {
+                endTime = System.currentTimeMillis() + timeout;
+            }
+            while (true) {
+                if (timeout != 0) {
+                    int remaining = (int) (endTime - System.currentTimeMillis());
+                    if (remaining <= 0) {
+                        break;
+                    }
+                    sock.setSoTimeout(remaining);
+                }
+                try {
+                    sock.receive(packet);
+                } catch (SocketTimeoutException e) {
                     break;
                 }
-                sock.setSoTimeout(remaining);
+                if (DEBUG) System.out.println("\n\nIncoming packet:");
+                if (DEBUG) hexdump(packet.getData(), 0, packet.getLength());
+                Result result = decode(packet.getData(), packet.getLength());
+                if (callback != null) {
+                    callback.onResult(result);
+                }
             }
-            try {
-                sock.receive(packet);
-            } catch (SocketTimeoutException e) {
-                break;
-            }
-            if (DEBUG) System.out.println("\n\nIncoming packet:");
-            if (DEBUG) hexdump(packet.getData(), 0, packet.getLength());
-            Result result = decode(packet.getData(), packet.getLength());
-            if (callback != null) {
-                callback.onResult(result);
-            }
+        } finally {
+            sock.close();
         }
     }
 
@@ -151,37 +155,41 @@ public class MDNSDiscover {
     public static Result resolve(String serviceName, int timeout) throws IOException {
         if (timeout < 0) throw new IllegalArgumentException();
         InetAddress group = InetAddress.getByName(MULTICAST_GROUP_ADDRESS);
-        MulticastSocket sock = new MulticastSocket();   // binds to a random free source port
-        if (DEBUG) System.out.println("Source port is " + sock.getLocalPort());
         if (DEBUG) System.out.println("Query packet:");
         byte[] data = queryPacket(serviceName, QCLASS_INTERNET | CLASS_FLAG_UNICAST, QTYPE_A, QTYPE_SRV, QTYPE_TXT);
         if (DEBUG) hexdump(data, 0, data.length);
         DatagramPacket packet = new DatagramPacket(data, data.length, group, PORT);
-        sock.setTimeToLive(255);
-        sock.send(packet);
-        byte[] buf = new byte[1024];
-        packet = new DatagramPacket(buf, buf.length);
-        Result result = new Result();
-        long endTime = 0;
-        if (timeout != 0) {
-            endTime = System.currentTimeMillis() + timeout;
-        }
-        // records could be returned in different packets, so we have to loop
-        // timeout applies to the acquisition of ALL packets
-        while (result.a == null || result.srv == null || result.txt == null) {
+        MulticastSocket sock = new MulticastSocket();   // binds to a random free source port
+        try {
+            if (DEBUG) System.out.println("Source port is " + sock.getLocalPort());
+            sock.setTimeToLive(255);
+            sock.send(packet);
+            byte[] buf = new byte[1024];
+            packet = new DatagramPacket(buf, buf.length);
+            Result result = new Result();
+            long endTime = 0;
             if (timeout != 0) {
-                int remaining = (int) (endTime - System.currentTimeMillis());
-                if (remaining <= 0) {
-                    break;
-                }
-                sock.setSoTimeout(remaining);
+                endTime = System.currentTimeMillis() + timeout;
             }
-            sock.receive(packet);
-            if (DEBUG) System.out.println("\n\nIncoming packet:");
-            if (DEBUG) hexdump(packet.getData(), 0, packet.getLength());
-            decode(packet.getData(), packet.getLength(), result);
+            // records could be returned in different packets, so we have to loop
+            // timeout applies to the acquisition of ALL packets
+            while (result.a == null || result.srv == null || result.txt == null) {
+                if (timeout != 0) {
+                    int remaining = (int) (endTime - System.currentTimeMillis());
+                    if (remaining <= 0) {
+                        break;
+                    }
+                    sock.setSoTimeout(remaining);
+                }
+                sock.receive(packet);
+                if (DEBUG) System.out.println("\n\nIncoming packet:");
+                if (DEBUG) hexdump(packet.getData(), 0, packet.getLength());
+                decode(packet.getData(), packet.getLength(), result);
+            }
+            return result;
+        } finally {
+            sock.close();
         }
-        return result;
     }
 
     private static void writeFQDN(String name, OutputStream out) throws IOException {
