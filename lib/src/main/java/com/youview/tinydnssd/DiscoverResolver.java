@@ -71,7 +71,8 @@ public class DiscoverResolver {
     private boolean mTransitioning;
     private ResolveTask mResolveTask;
     private final Map<String, NsdServiceInfo> mResolveQueue = new LinkedHashMap<>();
-
+    private boolean mLog;
+    
     /**
      * Equivalent to {@link #DiscoverResolver(Context, String, Listener, int)} with a
      * {@code debounceMillis} of 0.
@@ -100,13 +101,13 @@ public class DiscoverResolver {
             @Override
             public void put(String name, Object o) {
                 if (o != null) {
-                    Log.d(TAG, "add: " + name);
+                    if (mLog) Log.d(TAG, "add: " + name);
                     synchronized (mResolveQueue) {
                         mResolveQueue.put(name, null);
                     }
                     startResolveTaskIfNeeded();
                 } else {
-                    Log.d(TAG, "remove: " + name);
+                    if (mLog) Log.d(TAG, "remove: " + name);
                     synchronized (DiscoverResolver.this) {
                         synchronized (mResolveQueue) {
                             mResolveQueue.remove(name);
@@ -120,6 +121,14 @@ public class DiscoverResolver {
                 }
             }
         });
+    }
+
+    public void setLogEnabled(boolean logEnabled) {
+        mLog = logEnabled;
+    }
+
+    public boolean isLogEnabled() {
+        return mLog;
     }
 
     public synchronized void start() {
@@ -153,17 +162,17 @@ public class DiscoverResolver {
     private NsdManager.DiscoveryListener mDiscoveryListener = new NsdManager.DiscoveryListener() {
         @Override
         public void onStartDiscoveryFailed(String serviceType, int errorCode) {
-            Log.d(TAG, "onStartDiscoveryFailed() serviceType = [" + serviceType + "], errorCode = [" + errorCode + "]");
+            if (mLog) Log.d(TAG, "onStartDiscoveryFailed() serviceType = [" + serviceType + "], errorCode = [" + errorCode + "]");
         }
 
         @Override
         public void onStopDiscoveryFailed(String serviceType, int errorCode) {
-            Log.d(TAG, "onStopDiscoveryFailed() serviceType = [" + serviceType + "], errorCode = [" + errorCode + "]");
+            if (mLog) Log.d(TAG, "onStopDiscoveryFailed() serviceType = [" + serviceType + "], errorCode = [" + errorCode + "]");
         }
 
         @Override
         public void onDiscoveryStarted(String serviceType) {
-            Log.d(TAG, "onDiscoveryStarted() serviceType = [" + serviceType + "]");
+            if (mLog) Log.d(TAG, "onDiscoveryStarted() serviceType = [" + serviceType + "]");
             synchronized (DiscoverResolver.this) {
                 if (!mStarted) {
                     stopServiceDiscovery(this);
@@ -175,7 +184,7 @@ public class DiscoverResolver {
 
         @Override
         public void onDiscoveryStopped(String serviceType) {
-            Log.d(TAG, "onDiscoveryStopped() serviceType = [" + serviceType + "]");
+            if (mLog) Log.d(TAG, "onDiscoveryStopped() serviceType = [" + serviceType + "]");
             if (mStarted) {
                 discoverServices(serviceType, NsdManager.PROTOCOL_DNS_SD, this);
             } else {
@@ -185,7 +194,7 @@ public class DiscoverResolver {
 
         @Override
         public void onServiceFound(final NsdServiceInfo serviceInfo) {
-            Log.d(TAG, "onServiceFound() serviceInfo = [" + serviceInfo + "]");
+            if (mLog) Log.d(TAG, "onServiceFound() serviceInfo = [" + serviceInfo + "]");
             synchronized (DiscoverResolver.this) {
                 if (mStarted) {
                     String name = serviceInfo.getServiceName() + "." + serviceInfo.getServiceType() + "local";
@@ -196,7 +205,7 @@ public class DiscoverResolver {
 
         @Override
         public void onServiceLost(final NsdServiceInfo serviceInfo) {
-            Log.d(TAG, "onServiceLost() serviceInfo = [" + serviceInfo + "]");
+            if (mLog) Log.d(TAG, "onServiceLost() serviceInfo = [" + serviceInfo + "]");
             synchronized (DiscoverResolver.this) {
                 if (mStarted) {
                     String name = serviceInfo.getServiceName() + "." + serviceInfo.getServiceType() + "local";
