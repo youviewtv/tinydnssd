@@ -273,7 +273,7 @@ public class DiscoverResolver {
                         }
                     }
                 } catch(IOException e) {
-                    e.printStackTrace();
+                    if (mLog) Log.e(TAG, "didn't resolve", e);
                 }
             }
             return null;
