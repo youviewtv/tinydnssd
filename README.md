@@ -23,17 +23,17 @@ Usage
 
 ```java
 DiscoverResolver resolver = new DiscoverResolver(context, "_androidtvremote._tcp",
-    new DiscoverResolver.Listener() {
-        @Override
-        public void onServicesChanged(Map<String, MDNSDiscover.Result> services) {
-            for (MDNSDiscover.Result result : services.values()) {
-                // access the Bluetooth MAC from the TXT record
-                String mac = result.txt.dict.get("bt");
-                String name = result.srv.fqdn;
-                Log.d(TAG, name + " -> " + mac);
-            }
+        new DiscoverResolver.Listener() {
+    @Override
+    public void onServicesChanged(Map<String, MDNSDiscover.Result> services) {
+        for (MDNSDiscover.Result result : services.values()) {
+            // access the Bluetooth MAC from the TXT record
+            String mac = result.txt.dict.get("bt");
+            String name = result.srv.fqdn;
+            Log.d(TAG, name + " -> " + mac);
         }
-    });
+    }
+});
 resolver.start();
 ```
 
